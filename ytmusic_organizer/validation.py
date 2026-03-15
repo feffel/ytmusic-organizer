@@ -27,6 +27,9 @@ def _validate_playlists(plan: dict[str, Any]) -> None:
     for pidx, playlist in enumerate(playlists):
         playlist = _require_dict(playlist, f"playlists[{pidx}]")
         _require_str(playlist.get("name"), f"playlists[{pidx}].name")
+        description = playlist.get("description")
+        if description is not None and (not isinstance(description, str) or not description.strip()):
+            raise ValueError(f"playlists[{pidx}].description must be a non-empty string when provided")
         songs = playlist.get("songs")
         if not isinstance(songs, list):
             raise ValueError(f"playlists[{pidx}].songs must be an array")

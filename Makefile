@@ -1,16 +1,16 @@
-.PHONY: init bootstrap weekly-sync full-reset preview test
+.PHONY: setup sync reset cleanup preview test
 
-init:
-	python -m ytmusic_organizer.cli init --workspace .ytmo
+setup:
+	python -m ytmusic_organizer.cli setup --workspace .ytmo
 
-bootstrap:
-	python -m ytmusic_organizer.cli bootstrap --workspace .ytmo
+sync:
+	python -m ytmusic_organizer.cli sync --workspace .ytmo
 
-weekly-sync:
-	python -m ytmusic_organizer.cli weekly-sync --workspace .ytmo
+reset:
+	python -m ytmusic_organizer.cli reset --workspace .ytmo
 
-full-reset:
-	python -m ytmusic_organizer.cli full-reset --workspace .ytmo
+cleanup:
+	python -m ytmusic_organizer.cli cleanup --workspace .ytmo
 
 preview:
 	python -m ytmusic_organizer.cli preview --workspace .ytmo

@@ -11,4 +11,4 @@ fi
 
 source .venv/bin/activate
 
-python -m ytmusic_organizer.cli full-reset --workspace .ytmo "$@"
+python -m ytmusic_organizer.cli reset --workspace .ytmo "$@"

@@ -25,6 +25,10 @@ class WorkspacePaths:
         return self.root / "bootstrap.json"
 
     @property
+    def setup_state(self) -> Path:
+        return self.root / "setup_state.json"
+
+    @property
     def data_dir(self) -> Path:
         return self.root / "data"
 

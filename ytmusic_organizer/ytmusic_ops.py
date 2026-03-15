@@ -11,6 +11,17 @@ from ytmusicapi import YTMusic
 from .matching import find_match, normalize
 
 
+def build_playlist_description(playlist: dict[str, Any]) -> str:
+    managed_tag = "Managed by ytmusic-organizer"
+    explicit = str(playlist.get("description", "")).strip()
+    if explicit:
+        return f"{explicit} | {managed_tag}"
+
+    name = str(playlist.get("name", "")).strip()
+    vibe = f"Vibe: {name}" if name else "Vibe: curated from your liked songs"
+    return f"{vibe} | {managed_tag}"
+
+
 def make_ytmusic(auth_file: Path) -> YTMusic:
     session = requests.Session()
     session.request = functools.partial(session.request, timeout=90)
@@ -174,7 +185,7 @@ def apply_plan(
         elif create_playlists:
             playlist_id = yt.create_playlist(
                 title=playlist_name,
-                description="Created from ytmusic-organizer",
+                description=build_playlist_description(playlist),
             )
             existing[normalized_name] = {"title": playlist_name, "playlistId": playlist_id}
             existing_video_ids = set()

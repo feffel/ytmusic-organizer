@@ -18,6 +18,18 @@ class ValidationTests(unittest.TestCase):
             validate_new_plan(bad)
         self.assertIn("artist", str(ctx.exception))
 
+    def test_validate_full_plan_accepts_playlist_description(self) -> None:
+        plan = {
+            "playlists": [
+                {
+                    "name": "Night Drive",
+                    "description": "Late-night synth and neon mood",
+                    "songs": [{"title": "T", "artist": "A"}],
+                }
+            ]
+        }
+        validate_full_plan(plan)
+
 
 if __name__ == "__main__":
     unittest.main()

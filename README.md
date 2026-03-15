@@ -4,8 +4,10 @@ Organize your YouTube Music likes into practical playlists with a guided first-t
 
 ## Features
 
-- Guided onboarding: `ytmo init --bootstrap`
-- First bootstrap is non-destructive (create/populate only)
+- Guided onboarding: `ytmo setup`
+- Initial setup build is non-destructive (create/populate only)
+- Colorful setup wizard UI (Rich when available)
+- Setup resume after interruption/failure
 - Weekly incremental sync
 - Explicit destructive reset with confirmation
 - Manual mode (copy/paste prompt workflow) and optional OpenAI API mode
@@ -26,43 +28,37 @@ pipx install git+https://github.com/<org-or-user>/ytmusic-organizer.git
 
 ## Quickstart
 
-1. Prepare your YTMusic auth JSON.
-   - Generate it using the official ytmusicapi guide: [Browser Authentication](https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html).
-   - Use that file with this tool:
-     - default relative auth path resolves to `<workspace>/browser.json`
-     - or pass absolute path using `--auth-file /absolute/path/to/browser.json`
-   - Relative auth path defaults to `<workspace>/browser.json` (workspace default is `.ytmo`).
-   - Recommended: pass an absolute path with `--auth-file`.
-2. Run guided setup:
+1. Run guided setup:
 
 ```bash
-ytmo init --bootstrap --workspace .ytmo
+ytmo setup --workspace .ytmo
 ```
 
-Recommended with explicit absolute auth path:
+The wizard handles auth setup and writes auth to `<workspace>/browser.json` by default.
+If you already have an auth file, pass it explicitly:
 
 ```bash
-ytmo init --auth-file /absolute/path/to/browser.json --bootstrap --workspace .ytmo
+ytmo setup --auth-file /absolute/path/to/browser.json --workspace .ytmo
 ```
 
-3. For weekly updates:
+2. For weekly updates:
 
 ```bash
-ytmo weekly-sync --workspace .ytmo
+ytmo sync --workspace .ytmo
 ```
 
-4. For full destructive rebuild:
+3. For full destructive rebuild:
 
 ```bash
-ytmo full-reset --workspace .ytmo --yes
+ytmo reset --workspace .ytmo --yes
 ```
 
 ## Commands
 
-- `ytmo init [--bootstrap] [--mode manual|api] [--auth-file PATH]`
-- `ytmo bootstrap [--mode manual|api]`
-- `ytmo weekly-sync [--mode manual|api]`
-- `ytmo full-reset [--yes] [--mode manual|api]`
+- `ytmo setup [--mode manual|api] [--auth-file PATH] [--restart]`
+- `ytmo sync [--mode manual|api]`
+- `ytmo reset [--yes] [--mode manual|api]`
+- `ytmo cleanup [--yes] [--local-only]`
 - `ytmo preview [--plan PATH]`
 
 Common option:
@@ -90,9 +86,10 @@ Run with `--mode api` to auto-generate plan JSON.
 
 ## Safety and state
 
-- `ytmo bootstrap` is create-only (non-destructive).
-- `ytmo full-reset` is destructive and requires confirmation unless `--yes` is passed.
-- `ytmo weekly-sync` requires completed bootstrap and will instruct if missing.
+- `ytmo setup` is create-only (non-destructive).
+- `ytmo reset` is destructive and requires confirmation unless `--yes` is passed.
+- `ytmo sync` requires completed setup and will instruct if missing.
+- `ytmo cleanup` deletes playlists managed by this tool and removes local managed artifacts.
 
 ## Local workspace files
 
@@ -100,6 +97,7 @@ Run with `--mode api` to auto-generate plan JSON.
 
 - `config.toml`
 - `bootstrap.json`
+- `setup_state.json`
 - `state.json`
 - `managed_playlists.json`
 - `data/*.json`
@@ -109,10 +107,11 @@ These are intentionally ignored from git.
 ## Troubleshooting
 
 - `Auth file not found`:
-  - confirm your auth JSON exists
-  - ensure it is either at `<workspace>/browser.json` or passed via `--auth-file /absolute/path/to/browser.json`
-  - auth generation guide: [ytmusicapi Browser Authentication](https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html)
-- `Bootstrap has not been completed`: run `ytmo init --bootstrap` or `ytmo bootstrap`.
+  - run interactive setup: `ytmo setup --workspace .ytmo`
+  - or pass an existing file via `--auth-file /absolute/path/to/browser.json`
+  - auth guide: [ytmusicapi Browser Authentication](https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html)
+- `Setup has not been completed`: run `ytmo setup`.
+- `Setup interrupted`: run `ytmo setup --workspace .ytmo` to resume, or `ytmo setup --restart --workspace .ytmo` to restart.
 - API mode key error: set `OPENAI_API_KEY` or switch to `--mode manual`.
 
 ## Development

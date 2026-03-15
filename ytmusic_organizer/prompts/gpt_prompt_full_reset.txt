@@ -13,6 +13,7 @@ Important rules:
 - A song may be assigned to multiple playlists if it genuinely fits multiple moods or contexts
 - Do not force every song into multiple playlists
 - Playlist names should be practical and reusable, not overly niche
+- For each playlist, add a short natural-language description of the vibe/mood
 - Return only valid JSON
 - Do not include commentary outside JSON
 
@@ -29,6 +30,7 @@ Return JSON in exactly this shape:
   "playlists": [
     {
       "name": "Playlist name",
+      "description": "Short vibe/mood description",
       "songs": [
         {
           "title": "Exact Song Title",

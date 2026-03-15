@@ -14,18 +14,19 @@ class CliSmokeTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0)
-        self.assertIn("weekly-sync", result.stdout)
+        self.assertIn("sync", result.stdout)
+        self.assertIn("cleanup", result.stdout)
 
-    def test_init_accepts_workspace_after_subcommand(self) -> None:
+    def test_setup_accepts_workspace_after_subcommand(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
-            auth = Path(__file__).resolve().parent.parent / "browser.json"
+            auth = Path(tmp) / "missing-browser.json"
             result = subprocess.run(
                 [
                     sys.executable,
                     "-m",
                     "ytmusic_organizer.cli",
-                    "init",
+                    "setup",
                     "--workspace",
                     str(workspace),
                     "--non-interactive",
@@ -36,7 +37,8 @@ class CliSmokeTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertNotEqual(result.returncode, 2, msg=result.stderr)
+            self.assertIn("Auth file is missing", result.stderr)
 
 
 if __name__ == "__main__":

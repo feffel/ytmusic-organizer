@@ -11,4 +11,4 @@ fi
 
 source .venv/bin/activate
 
-python -m ytmusic_organizer.cli weekly-sync --workspace .ytmo "$@"
+python -m ytmusic_organizer.cli sync --workspace .ytmo "$@"
