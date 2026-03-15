@@ -1,6 +1,8 @@
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
 
 # Local auth/state
 browser.json
@@ -10,3 +12,6 @@ managed_playlists.json
 
 # Generated plans/exports
 data/*.json
+
+# Local CLI workspace
+.ytmo/
