@@ -101,7 +101,6 @@ def run_setup(
     restart: bool = False,
 ) -> dict[str, Any]:
     ui = WizardUI()
-    ui.title("ytmusic-organizer setup")
 
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
@@ -164,7 +163,7 @@ def run_setup(
 
         if not state.is_step_done("plan_ready") or not paths.playlist_plan.exists():
             ui.step("Generate or wait for playlist plan")
-            _obtain_full_plan(mode, config, paths)
+            _obtain_full_plan(mode, config, paths, ui=ui)
             state.mark_step("plan_ready")
             ui.success("Plan ready")
         else:
@@ -212,7 +211,7 @@ def run_setup(
         raise
 
 
-def _obtain_full_plan(mode: str, config: Config, paths: WorkspacePaths) -> dict[str, Any]:
+def _obtain_full_plan(mode: str, config: Config, paths: WorkspacePaths, ui: WizardUI | None = None) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_full_reset.txt")
     songs = json.loads(paths.liked_songs.read_text(encoding="utf-8"))
     prompt_text = render_prompt(
@@ -223,8 +222,13 @@ def _obtain_full_plan(mode: str, config: Config, paths: WorkspacePaths) -> dict[
     prompt_path.write_text(prompt_text, encoding="utf-8")
 
     if mode == "manual":
-        print("Open prompt file:", prompt_path)
-        print("Save model JSON response to:", paths.playlist_plan)
+        if ui:
+            ui.step("Manual classification required")
+            ui.note(f"Open prompt file: {prompt_path}")
+            ui.note(f"Save model JSON response to: {paths.playlist_plan}")
+        else:
+            print("Open prompt file:", prompt_path)
+            print("Save model JSON response to:", paths.playlist_plan)
         plan = wait_for_json_file(paths.playlist_plan)
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
@@ -233,7 +237,7 @@ def _obtain_full_plan(mode: str, config: Config, paths: WorkspacePaths) -> dict[
     return validate_full_plan(plan)
 
 
-def _obtain_new_plan(mode: str, config: Config, paths: WorkspacePaths) -> dict[str, Any]:
+def _obtain_new_plan(mode: str, config: Config, paths: WorkspacePaths, ui: WizardUI | None = None) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_new_songs.txt")
     songs = json.loads(paths.new_likes.read_text(encoding="utf-8"))
     managed = _load_managed_playlists(paths)
@@ -249,8 +253,13 @@ def _obtain_new_plan(mode: str, config: Config, paths: WorkspacePaths) -> dict[s
     prompt_path.write_text(prompt_text, encoding="utf-8")
 
     if mode == "manual":
-        print("Open prompt file:", prompt_path)
-        print("Save model JSON response to:", paths.new_plan)
+        if ui:
+            ui.step("Manual classification required")
+            ui.note(f"Open prompt file: {prompt_path}")
+            ui.note(f"Save model JSON response to: {paths.new_plan}")
+        else:
+            print("Open prompt file:", prompt_path)
+            print("Save model JSON response to:", paths.new_plan)
         plan = wait_for_json_file(paths.new_plan)
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
@@ -302,7 +311,8 @@ def run_weekly_sync(workspace: Path, cwd: Path, mode: str | None = None) -> dict
     if not new_likes:
         return {"new_likes": 0}
 
-    _obtain_new_plan(mode, config, paths)
+    ui = WizardUI()
+    _obtain_new_plan(mode, config, paths, ui=ui)
     result = apply_new_likes(yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches)
     result["new_likes"] = len(new_likes)
     return result
@@ -318,7 +328,8 @@ def run_full_reset(workspace: Path, cwd: Path, mode: str | None = None) -> dict[
     yt = make_ytmusic(auth_path)
 
     liked = export_liked(yt, paths.liked_songs)
-    _obtain_full_plan(mode, config, paths)
+    ui = WizardUI()
+    _obtain_full_plan(mode, config, paths, ui=ui)
 
     update_managed_playlists(paths.playlist_plan, paths.managed)
     deleted = delete_managed_playlists(yt, paths.managed)

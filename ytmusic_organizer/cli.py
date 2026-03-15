@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from .ui import WizardUI
 from .workflows import run_cleanup, run_full_reset, run_preview, run_setup, run_weekly_sync
 
 
@@ -108,9 +109,11 @@ def main(argv: list[str] | None = None) -> int:
 
     workspace = Path(args.workspace).resolve()
     cwd = Path.cwd().resolve()
+    ui = WizardUI()
 
     try:
         if args.command == "setup":
+            ui.title("ytmusic-organizer setup")
             result = run_setup(
                 workspace=workspace,
                 cwd=cwd,
@@ -119,53 +122,57 @@ def main(argv: list[str] | None = None) -> int:
                 interactive=not args.non_interactive,
                 restart=args.restart,
             )
-            print(f"Initialized workspace at {result['workspace']}")
-            print("Initial playlist build completed.")
+            ui.success(f"Initialized workspace at {result['workspace']}")
+            ui.success("Initial playlist build completed.")
             return 0
 
         if args.command == "sync":
+            ui.title("ytmusic-organizer sync")
             result = run_weekly_sync(workspace=workspace, cwd=cwd, mode=args.mode)
             if result.get("new_likes", 0) == 0:
-                print("No new liked songs found.")
+                ui.warning("No new liked songs found.")
             else:
-                print(
+                ui.success(
                     f"Processed {result['new_likes']} new likes, "
                     f"missing matches: {result.get('missing', 0)}"
                 )
             return 0
 
         if args.command == "reset":
+            ui.title("ytmusic-organizer reset")
             if not args.yes:
                 answer = input("This will delete managed playlists and rebuild. Continue? [y/N]: ").strip().lower()
                 if answer not in {"y", "yes"}:
-                    print("Cancelled.")
+                    ui.warning("Cancelled.")
                     return 1
             result = run_full_reset(workspace=workspace, cwd=cwd, mode=args.mode)
-            print(
+            ui.success(
                 f"Full reset completed. Liked songs: {result['liked_count']}, "
                 f"deleted playlists: {result['deleted_playlists']}"
             )
             return 0
 
         if args.command == "preview":
+            ui.title("ytmusic-organizer preview")
             plan_path = Path(args.plan).resolve() if args.plan else None
             result = run_preview(workspace=workspace, plan_path=plan_path)
-            print(
+            ui.pretty(
                 f"Matched: {result['matched']}, missing: {result['missing']}, "
                 f"loose: {result['loose']}, ambiguous: {result['ambiguous']}"
             )
             return 0
 
         if args.command == "cleanup":
+            ui.title("ytmusic-organizer cleanup")
             if not args.yes:
                 answer = input(
                     "This will delete playlists managed by ytmusic-organizer and remove local managed files. Continue? [y/N]: "
                 ).strip().lower()
                 if answer not in {"y", "yes"}:
-                    print("Cancelled.")
+                    ui.warning("Cancelled.")
                     return 1
             result = run_cleanup(workspace=workspace, cwd=cwd, local_only=args.local_only)
-            print(
+            ui.success(
                 f"Cleanup completed. Deleted playlists: {result['deleted_playlists']}, "
                 f"removed local files: {result['removed_local_files']}"
             )
