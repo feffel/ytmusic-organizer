@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Local auth/state
+browser.json
+state.json
+managed_playlists.json
+.env
+
+# Generated plans/exports
+data/*.json

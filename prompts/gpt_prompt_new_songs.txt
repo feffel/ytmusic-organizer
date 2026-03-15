@@ -1,0 +1,54 @@
+I am updating my YouTube Music organization.
+
+Task:
+Classify my newly added liked songs into my existing playlists.
+
+Important rules:
+- Use the exact song title text exactly as provided
+- Use the exact primary artist text exactly as provided
+- Do not rewrite titles
+- Do not shorten artist names
+- Do not invent alternate spellings
+- Do not create any new playlists
+- A song may be assigned to multiple playlists if it genuinely fits multiple moods or contexts
+- Do not force every song into multiple playlists; only do that when it is a strong fit
+- If a song is ambiguous but still fits one playlist reasonably well, assign it to one best playlist
+- If a song strongly fits two or more playlists, include it in each of those playlists
+- Return only valid JSON
+- Do not include commentary before or after the JSON
+
+Existing playlists:
+- Manifest & Midnight Air
+- Chill & Heartfelt
+- Arabic Pop & Warm Nights
+- Global Groove & Summer Heat
+- Arabic Rap & Street Energy
+- Western Rap, Attitude & Chaos
+- Drive, Hype & Throwback Boost
+
+Return JSON in exactly this shape:
+
+{
+  "playlists": [
+    {
+      "name": "Playlist name",
+      "songs": [
+        {
+          "title": "Exact Song Title",
+          "artist": "Exact Primary Artist"
+        }
+      ]
+    }
+  ]
+}
+
+Notes:
+- The same song may appear in more than one playlist
+- Use only playlist names from the list above
+- Preserve exact song title and exact artist text from the source list
+- If there are no good matches for a playlist, it can have an empty songs list or be omitted
+- Prefer practical listening context and mood over micro-genre hair-splitting
+
+Now classify these new songs:
+
+[PASTE CONTENTS OF new_likes.json HERE]
