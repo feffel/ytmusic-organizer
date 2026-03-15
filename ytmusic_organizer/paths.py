@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def default_workspace() -> Path:
+    return Path.home() / ".ytmusic-organizer"
+
+
 @dataclass(frozen=True)
 class WorkspacePaths:
     root: Path

@@ -7,11 +7,11 @@ It supports:
 - destructive rebuild (`ytmo reset`)
 - cleanup (`ytmo cleanup`)
 
-Runtime state is workspace-centric: mutable files live under a workspace directory (default `.ytmo/`).
+Runtime state is workspace-centric: mutable files live under a workspace directory (default `~/.ytmusic-organizer/`).
 
 # Core Workflows
 ## Weekly Sync
-Primary entrypoint: `ytmo sync --workspace .ytmo` (or `weekly_sync.sh`).
+Primary entrypoint: `ytmo sync`.
 
 Flow:
 1. Load workspace config and auth.
@@ -28,7 +28,7 @@ Implementation location:
 - Core ops: `ytmusic_organizer/ytmusic_ops.py`
 
 ## Full Reset
-Primary entrypoint: `ytmo reset --workspace .ytmo --yes` (or `full_reset.sh`).
+Primary entrypoint: `ytmo reset --yes`.
 
 Flow:
 1. Export full likes via `export_liked(...)` into `data/liked_songs.json`.
@@ -46,7 +46,7 @@ Implementation location:
 - Core ops: `ytmusic_organizer/ytmusic_ops.py`
 
 # Key Files
-Note: below paths are workspace-relative (default `.ytmo/`) unless explicitly noted.
+Note: below paths are workspace-relative (default `~/.ytmusic-organizer/`) unless explicitly noted.
 
 - `browser.json`
 Type: source/input secret auth file.
@@ -140,26 +140,24 @@ Strict schema checks for plan JSON.
 Prompt rendering, manual wait loop, OpenAI API classification.
 
 # Shell Workflows
-- `weekly_sync.sh`
-1. Ensure script runs from repo root.
-2. Ensure `.venv/` exists.
-3. Activate `.venv`.
-4. Execute `python -m ytmusic_organizer.cli sync --workspace .ytmo "$@"`.
+No dedicated shell wrapper scripts are used.
 
-- `full_reset.sh`
-1. Ensure script runs from repo root.
-2. Ensure `.venv/` exists.
-3. Activate `.venv`.
-4. Execute `python -m ytmusic_organizer.cli reset --workspace .ytmo "$@"`.
+Canonical execution paths:
+1. Direct CLI via `ytmo ...` (or `python -m ytmusic_organizer.cli ...`).
+2. `make` targets that delegate to the CLI.
 
 # Make Targets
 Current `Makefile` targets are:
-- `make setup` -> `ytmo setup --workspace .ytmo`
-- `make sync` -> `ytmo sync --workspace .ytmo`
-- `make reset` -> `ytmo reset --workspace .ytmo`
-- `make cleanup` -> `ytmo cleanup --workspace .ytmo`
-- `make preview` -> `ytmo preview --workspace .ytmo`
+- `make setup` -> `ytmo setup`
+- `make sync` -> `ytmo sync`
+- `make reset` -> `ytmo reset`
+- `make cleanup` -> `ytmo cleanup`
+- `make preview` -> `ytmo preview`
 - `make test` -> run unit tests
+
+Makefile execution detail:
+- All targets run through `.venv/bin/python` and require `.venv` to exist.
+- `check-venv` guard fails fast with setup instructions if `.venv` is missing.
 
 # Data Flow
 ## `data/liked_songs.json`

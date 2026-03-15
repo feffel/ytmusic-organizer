@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from .paths import default_workspace
 from .ui import WizardUI
 from .workflows import run_cleanup, run_full_reset, run_preview, run_setup, run_weekly_sync
 
@@ -17,10 +18,10 @@ def build_helpful_error(exc: Exception) -> str:
             f"{text}\n\n"
             "How to fix:\n"
             "1. Run interactive setup (recommended):\n"
-            "   ytmo setup --workspace .ytmo\n"
+            "   ytmo setup\n"
             "   The wizard creates <workspace>/browser.json for you.\n"
             "2. If you already have a file, pass it explicitly:\n"
-            "   ytmo setup --auth-file /absolute/path/to/browser.json --workspace .ytmo\n"
+            "   ytmo setup --auth-file /absolute/path/to/browser.json\n"
             "3. Auth guide reference:\n"
             "   https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html"
         )
@@ -31,7 +32,7 @@ def build_helpful_error(exc: Exception) -> str:
             f"{text}\n\n"
             "How to fix:\n"
             "1. Run guided setup:\n"
-            "   ytmo setup --workspace .ytmo"
+            "   ytmo setup"
         )
 
     if "Setup was interrupted" in text:
@@ -39,9 +40,9 @@ def build_helpful_error(exc: Exception) -> str:
             "Setup was interrupted.\n"
             "How to fix:\n"
             "1. Re-run setup to resume from the last completed step:\n"
-            "   ytmo setup --workspace .ytmo\n"
+            "   ytmo setup\n"
             "2. To restart from scratch:\n"
-            "   ytmo setup --restart --workspace .ytmo"
+            "   ytmo setup --restart"
         )
 
     if "OPENAI_API_KEY is required for --mode api" in text:
@@ -73,7 +74,12 @@ def _base_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_workspace_argument(command_parser: argparse.ArgumentParser) -> None:
-        command_parser.add_argument("--workspace", default=".ytmo", help="Workspace directory (default: .ytmo)")
+        default_path = str(default_workspace())
+        command_parser.add_argument(
+            "--workspace",
+            default=default_path,
+            help=f"Workspace directory (default: {default_path})",
+        )
 
     p_setup = sub.add_parser("setup", help="Guided first-time setup and initial playlist build")
     add_workspace_argument(p_setup)

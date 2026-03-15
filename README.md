@@ -31,26 +31,26 @@ pipx install git+https://github.com/<org-or-user>/ytmusic-organizer.git
 1. Run guided setup:
 
 ```bash
-ytmo setup --workspace .ytmo
+ytmo setup
 ```
 
 The wizard handles auth setup and writes auth to `<workspace>/browser.json` by default.
 If you already have an auth file, pass it explicitly:
 
 ```bash
-ytmo setup --auth-file /absolute/path/to/browser.json --workspace .ytmo
+ytmo setup --auth-file /absolute/path/to/browser.json
 ```
 
 2. For weekly updates:
 
 ```bash
-ytmo sync --workspace .ytmo
+ytmo sync
 ```
 
 3. For full destructive rebuild:
 
 ```bash
-ytmo reset --workspace .ytmo --yes
+ytmo reset --yes
 ```
 
 ## Commands
@@ -63,7 +63,7 @@ ytmo reset --workspace .ytmo --yes
 
 Common option:
 
-- `--workspace` (default `.ytmo`)
+- `--workspace` (default `~/.ytmusic-organizer`)
 
 ## Modes
 
@@ -71,8 +71,9 @@ Common option:
 
 The CLI exports song JSON and waits for your model response JSON file:
 
-- full flows read/write `.ytmo/data/playlist_plan.json`
-- weekly sync reads/writes `.ytmo/data/new_plan.json`
+- full flows read/write `~/.ytmusic-organizer/data/playlist_plan.json` by default
+- weekly sync reads/writes `~/.ytmusic-organizer/data/new_plan.json` by default
+- default workspace path is `~/.ytmusic-organizer` (override with `--workspace`)
 
 Prompt templates are packaged in `ytmusic_organizer/prompts/`.
 
@@ -93,7 +94,7 @@ Run with `--mode api` to auto-generate plan JSON.
 
 ## Local workspace files
 
-`.ytmo/` contains local mutable files:
+`~/.ytmusic-organizer/` contains local mutable files by default:
 
 - `config.toml`
 - `bootstrap.json`
@@ -107,11 +108,11 @@ These are intentionally ignored from git.
 ## Troubleshooting
 
 - `Auth file not found`:
-  - run interactive setup: `ytmo setup --workspace .ytmo`
+  - run interactive setup: `ytmo setup`
   - or pass an existing file via `--auth-file /absolute/path/to/browser.json`
   - auth guide: [ytmusicapi Browser Authentication](https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html)
 - `Setup has not been completed`: run `ytmo setup`.
-- `Setup interrupted`: run `ytmo setup --workspace .ytmo` to resume, or `ytmo setup --restart --workspace .ytmo` to restart.
+- `Setup interrupted`: run `ytmo setup` to resume, or `ytmo setup --restart` to restart.
 - API mode key error: set `OPENAI_API_KEY` or switch to `--mode manual`.
 
 ## Development

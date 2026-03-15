@@ -1,19 +1,24 @@
-.PHONY: setup sync reset cleanup preview test
+.PHONY: check-venv setup sync reset cleanup preview test
 
-setup:
-	python -m ytmusic_organizer.cli setup --workspace .ytmo
+VENV_PYTHON := .venv/bin/python
 
-sync:
-	python -m ytmusic_organizer.cli sync --workspace .ytmo
+check-venv:
+	@test -x $(VENV_PYTHON) || (echo "Error: .venv not found. Create it with: python -m venv .venv && . .venv/bin/activate && pip install -e ." && exit 1)
 
-reset:
-	python -m ytmusic_organizer.cli reset --workspace .ytmo
+setup: check-venv
+	$(VENV_PYTHON) -m ytmusic_organizer.cli setup
 
-cleanup:
-	python -m ytmusic_organizer.cli cleanup --workspace .ytmo
+sync: check-venv
+	$(VENV_PYTHON) -m ytmusic_organizer.cli sync
 
-preview:
-	python -m ytmusic_organizer.cli preview --workspace .ytmo
+reset: check-venv
+	$(VENV_PYTHON) -m ytmusic_organizer.cli reset
 
-test:
-	python -m unittest discover -s tests -v
+cleanup: check-venv
+	$(VENV_PYTHON) -m ytmusic_organizer.cli cleanup
+
+preview: check-venv
+	$(VENV_PYTHON) -m ytmusic_organizer.cli preview
+
+test: check-venv
+	$(VENV_PYTHON) -m unittest discover -s tests -v

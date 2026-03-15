@@ -17,16 +17,15 @@ These instructions apply to this repository.
 
 ## Workflow Conventions
 - Prefer CLI entrypoints over ad-hoc scripts:
-  - `ytmo setup --workspace .ytmo`
-  - `ytmo sync --workspace .ytmo`
-  - `ytmo reset --workspace .ytmo`
-  - `ytmo cleanup --workspace .ytmo`
-  - `ytmo preview --workspace .ytmo`
-- Shell wrappers `weekly_sync.sh` and `full_reset.sh` must remain aligned with CLI behavior.
+  - `ytmo setup`
+  - `ytmo sync`
+  - `ytmo reset`
+  - `ytmo cleanup`
+  - `ytmo preview`
 - Make targets must reflect actual supported CLI behavior.
 
 ## State and Safety Conventions
-- Treat `.ytmo/` as the active mutable workspace by default.
+- Treat `~/.ytmusic-organizer/` as the active mutable workspace by default.
 - Do not overwrite or expose `browser.json`.
 - Only delete playlists listed in `managed_playlists.json`.
 - Never perform arbitrary playlist deletion.

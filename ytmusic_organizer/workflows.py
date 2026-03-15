@@ -28,15 +28,15 @@ from .ytmusic_ops import (
 
 def ensure_bootstrap_completed(marker_path: Path) -> None:
     if not marker_path.exists():
-        raise RuntimeError("Setup has not been completed. Run `ytmo setup --workspace .ytmo`.")
+        raise RuntimeError("Setup has not been completed. Run `ytmo setup`.")
 
     try:
         marker = json.loads(marker_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise RuntimeError("Setup marker is invalid. Run `ytmo setup --workspace .ytmo` again.") from exc
+        raise RuntimeError("Setup marker is invalid. Run `ytmo setup` again.") from exc
 
     if not marker.get("completed"):
-        raise RuntimeError("Setup has not been completed. Run `ytmo setup --workspace .ytmo`.")
+        raise RuntimeError("Setup has not been completed. Run `ytmo setup`.")
 
 
 def _set_bootstrap_completed(marker_path: Path, completed: bool = True) -> None:
@@ -205,7 +205,7 @@ def run_setup(
         return {"liked_count": len(liked), "workspace": str(paths.root)}
     except KeyboardInterrupt as exc:
         state.mark_error("setup interrupted by user")
-        raise RuntimeError("Setup was interrupted. Re-run `ytmo setup --workspace .ytmo` to resume.") from exc
+        raise RuntimeError("Setup was interrupted. Re-run `ytmo setup` to resume.") from exc
     except Exception as exc:
         state.mark_error(str(exc))
         raise
