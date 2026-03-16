@@ -1,16 +1,33 @@
 # ytmusic-organizer
 
+[![PyPI version](https://img.shields.io/pypi/v/ytmusic-organizer)](https://pypi.org/project/ytmusic-organizer/)
+[![Python versions](https://img.shields.io/pypi/pyversions/ytmusic-organizer)](https://pypi.org/project/ytmusic-organizer/)
+[![License](https://img.shields.io/pypi/l/ytmusic-organizer)](https://github.com/feffel/ytmusic-organizer/blob/main/LICENSE)
+[![CI](https://github.com/feffel/ytmusic-organizer/actions/workflows/ci.yml/badge.svg)](https://github.com/feffel/ytmusic-organizer/actions/workflows/ci.yml)
+[![PyPI Publish](https://github.com/feffel/ytmusic-organizer/actions/workflows/release-pypi.yml/badge.svg)](https://github.com/feffel/ytmusic-organizer/actions/workflows/release-pypi.yml)
+
 Organize your YouTube Music likes into practical playlists with a guided first-time setup and weekly incremental sync.
+
+```text
+            ██╗   ██╗████████╗███╗   ███╗ ██████╗
+             ╚██╗ ██╔╝╚══██╔══╝████╗ ████║██╔═══██╗
+              ╚████╔╝    ██║   ██╔████╔██║██║   ██║
+               ╚██╔╝     ██║   ██║╚██╔╝██║██║   ██║
+                ██║      ██║   ██║ ╚═╝ ██║╚██████╔╝
+                ╚═╝      ╚═╝   ╚═╝     ╚═╝ ╚═════╝
+
+           Y T M O  •  Playlist Automation, Human Taste.
+```
 
 ## Features
 
-- Guided onboarding: `ytmo setup`
-- Initial setup build is non-destructive (create/populate only)
-- Colorful setup wizard UI (Rich when available)
-- Setup resume after interruption/failure
-- Weekly incremental sync
-- Explicit destructive reset with confirmation
-- Manual mode (copy/paste prompt workflow) and optional OpenAI API mode
+- Build a complete playlist system from your full liked songs library.
+- Keep playlists up to date by syncing only newly liked tracks.
+- Rebuild managed playlists safely when you want a fresh structure.
+- Track managed playlists by ID to avoid deleting unrelated playlists.
+- Run in manual mode (bring your own model output) or API mode (`OPENAI_API_KEY`).
+- Resume interrupted setup without restarting from scratch.
+- Automate runs with non-interactive flags and machine-readable `--json` output.
 
 ## Install
 
@@ -23,8 +40,20 @@ pipx install ytmusic-organizer
 ### From GitHub (if you prefer source install)
 
 ```bash
-pipx install git+https://github.com/<org-or-user>/ytmusic-organizer.git
+pipx install git+https://github.com/feffel/ytmusic-organizer.git
 ```
+
+## Who This Is For
+
+Good fit:
+- You like songs in YouTube Music and want them organized into reusable playlists.
+- You are too busy (or too lazy) to hand-curate playlists manually.
+- You want a repeatable weekly sync workflow.
+- You are comfortable running a CLI.
+
+Not a fit:
+- You need fully automatic playlist strategy generation without any manual/API classification step.
+- You need cloud-hosted multi-user service behavior.
 
 ## Quickstart
 
@@ -33,6 +62,10 @@ pipx install git+https://github.com/<org-or-user>/ytmusic-organizer.git
 ```bash
 ytmo setup
 ```
+
+Safety model:
+- This tool only deletes playlists tracked in `managed_playlists.json` (by playlist ID).
+- `reset` and `cleanup` are destructive and require explicit confirmation unless `--yes` is passed.
 
 The wizard handles auth setup and writes auth to `<workspace>/browser.json` by default.
 If you already have an auth file, pass it explicitly:
@@ -53,6 +86,18 @@ ytmo sync
 ytmo reset --yes
 ```
 
+Typical weekly commands:
+
+Manual mode:
+```bash
+ytmo sync --mode manual
+```
+
+API mode:
+```bash
+ytmo sync --mode api
+```
+
 ## Commands
 
 - `ytmo setup [--mode manual|api] [--auth-file PATH] [--non-interactive] [--plan-from-stdin] [--restart]`
@@ -65,6 +110,13 @@ Common option:
 
 - `--workspace` (default `~/.ytmusic-organizer`)
 - `--json` (machine-readable output; keeps default Rich output unchanged when omitted)
+
+`--json` example:
+
+```bash
+ytmo sync --mode api --json
+# {"status":"ok","command":"sync","result":{"new_likes":3,"missing":1,"processed":3}}
+```
 
 ## Modes
 
