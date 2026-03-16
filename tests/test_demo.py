@@ -34,6 +34,31 @@ class DemoTests(unittest.TestCase):
             self.assertTrue(result["simulated"])
             self.assertEqual(result["mode"], "api")
 
+    def test_run_demo_uses_pacing_in_interactive_tty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            with (
+                patch("ytmusic_organizer.workflows.sys.stdout.isatty", return_value=True),
+                patch("ytmusic_organizer.workflows.time.sleep") as sleep_mock,
+                patch("ytmusic_organizer.workflows.WizardUI.title"),
+                patch("ytmusic_organizer.workflows.WizardUI.warning"),
+                patch("ytmusic_organizer.workflows.WizardUI.step"),
+                patch("ytmusic_organizer.workflows.WizardUI.note"),
+                patch("ytmusic_organizer.workflows.WizardUI.success"),
+            ):
+                run_demo(workspace=workspace, mode="manual", emit_ui=True)
+            self.assertGreaterEqual(sleep_mock.call_count, 1)
+
+    def test_run_demo_skips_pacing_when_ui_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            with (
+                patch("ytmusic_organizer.workflows.sys.stdout.isatty", return_value=True),
+                patch("ytmusic_organizer.workflows.time.sleep") as sleep_mock,
+            ):
+                run_demo(workspace=workspace, mode="manual", emit_ui=False)
+            self.assertEqual(sleep_mock.call_count, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

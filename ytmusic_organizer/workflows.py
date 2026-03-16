@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import termios
+import time
 from typing import Any, Callable
 
 from ytmusicapi import setup as ytmusic_setup
@@ -312,40 +313,66 @@ def run_demo(
     if selected_mode not in {"manual", "api"}:
         raise ValueError("mode must be one of: manual, api")
 
+    pace = emit_ui and sys.stdout.isatty()
+
+    def pause(seconds: float) -> None:
+        if pace:
+            time.sleep(seconds)
+
     ui = WizardUI(enabled=emit_ui)
     ui.title("ytmusic-organizer demo")
     ui.warning("DEMO ONLY - no auth, downloads, network calls, or file writes.")
+    pause(0.6)
 
     ui.step("Workspace and config")
     ui.note(f"Workspace context (simulated): {workspace}")
     ui.note(f"Classification mode (simulated): {selected_mode}")
+    ui.note("Preparing setup inputs (simulated)...")
+    pause(0.9)
     ui.success("Workspace ready (simulated)")
+    pause(0.5)
 
     ui.step("Auth check")
+    ui.note("Checking browser auth file (simulated)...")
+    pause(0.8)
     ui.note("Using simulated browser headers: cookie, x-goog-authuser.")
+    pause(0.8)
     ui.success("Auth ready (simulated)")
+    pause(0.5)
 
     fake_liked_count = 48
     ui.step("Export full liked songs")
+    ui.note("Fetching liked songs from YouTube Music (simulated)...")
+    pause(1.0)
     ui.success(f"Exported {fake_liked_count} liked songs (simulated)")
+    pause(0.5)
 
     ui.step("Generate playlist plan")
     if selected_mode == "manual":
         ui.note("Manual mode simulation: prompt opened and JSON pasted.")
+        pause(0.9)
     else:
         ui.note("API mode simulation: model returned validated plan JSON.")
+        pause(0.9)
     fake_playlists = 7
     ui.success(f"Plan ready with {fake_playlists} playlists (simulated)")
+    pause(0.5)
 
     ui.step("Create and fill playlists")
     fake_added = 42
     fake_missing = 3
+    ui.note("Resolving matches and playlist diffs (simulated)...")
+    pause(1.1)
     ui.success(
         f"Playlists created/updated (simulated): added={fake_added}, missing={fake_missing}"
     )
+    pause(0.5)
 
     ui.step("Initialize incremental state")
+    ui.note("Saving processed IDs (simulated)...")
+    pause(0.8)
     ui.success("State initialized (simulated)")
+    pause(0.6)
     ui.success("Demo completed (simulated)")
 
     return {
