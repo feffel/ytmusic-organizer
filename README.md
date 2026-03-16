@@ -154,7 +154,8 @@ PyPI publishing is automated via GitHub Actions:
 - `.github/workflows/release-pypi.yml`: publishes on `v*` tags
 - `.github/workflows/release-testpypi.yml`: manual TestPyPI publish
 
-Required repository secrets:
+Publishing auth model:
 
-- `PYPI_API_TOKEN`
-- `TEST_PYPI_API_TOKEN`
+- Uses PyPI/TestPyPI Trusted Publishing (OIDC) from GitHub Actions.
+- No `PYPI_API_TOKEN`/`TEST_PYPI_API_TOKEN` repository secrets are required.
+- PyPI/TestPyPI project must have matching trusted publisher configuration for this repository/workflow.

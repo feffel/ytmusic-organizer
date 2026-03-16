@@ -165,6 +165,11 @@ Makefile execution detail:
 Automation docs:
 - `docs/automation.md` is the integration contract for agents/scripts (non-interactive flags, stdin manual mode, JSON output shape).
 
+Release automation:
+- `.github/workflows/release-pypi.yml` publishes on `v*` tags using Trusted Publishing (OIDC).
+- `.github/workflows/release-testpypi.yml` publishes manually to TestPyPI using Trusted Publishing (OIDC).
+- No PyPI token secrets are required when trusted publisher bindings are configured on PyPI/TestPyPI.
+
 # Data Flow
 ## `data/liked_songs.json`
 - Created during setup/reset.
