@@ -98,11 +98,11 @@ def build_helpful_error(exc: Exception) -> str:
             "3. Save corrected JSON and rerun."
         )
 
-    if "--yes is required when --non-interactive is set for reset" in text:
+    if "--yes is required when --non-interactive is set for rebuild" in text:
         return (
-            "Non-interactive reset requires explicit destructive confirmation.\n"
+            "Non-interactive rebuild requires explicit destructive confirmation.\n"
             "How to fix:\n"
-            "1. Re-run reset with --yes.\n"
+            "1. Re-run rebuild with --yes.\n"
             "2. Or remove --non-interactive to confirm interactively."
         )
 
@@ -131,9 +131,17 @@ def _base_parser() -> argparse.ArgumentParser:
             help="Print machine-readable JSON output",
         )
 
+    def add_dry_run_argument(command_parser: argparse.ArgumentParser) -> None:
+        command_parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Simulate actions without mutating remote playlists or workspace files",
+        )
+
     p_setup = sub.add_parser("setup", help="Guided first-time setup and initial playlist build")
     add_workspace_argument(p_setup)
     add_json_argument(p_setup)
+    add_dry_run_argument(p_setup)
     p_setup.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_setup.add_argument("--auth-file", help="Path to browser.json auth file")
     p_setup.add_argument("--non-interactive", action="store_true", help="Disable prompts")
@@ -142,19 +150,22 @@ def _base_parser() -> argparse.ArgumentParser:
     p_sync = sub.add_parser("sync", help="Apply incremental liked-song updates")
     add_workspace_argument(p_sync)
     add_json_argument(p_sync)
+    add_dry_run_argument(p_sync)
     p_sync.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_sync.add_argument("--non-interactive", action="store_true", help="Disable prompts")
 
-    p_reset = sub.add_parser("reset", help="Delete managed playlists and rebuild")
-    add_workspace_argument(p_reset)
-    add_json_argument(p_reset)
-    p_reset.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
-    p_reset.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
-    p_reset.add_argument("--non-interactive", action="store_true", help="Disable prompts")
+    p_rebuild = sub.add_parser("rebuild", help="Delete managed playlists and rebuild")
+    add_workspace_argument(p_rebuild)
+    add_json_argument(p_rebuild)
+    add_dry_run_argument(p_rebuild)
+    p_rebuild.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
+    p_rebuild.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
+    p_rebuild.add_argument("--non-interactive", action="store_true", help="Disable prompts")
 
     p_cleanup = sub.add_parser("cleanup", help="Delete playlists managed by this tool and local managed artifacts")
     add_workspace_argument(p_cleanup)
     add_json_argument(p_cleanup)
+    add_dry_run_argument(p_cleanup)
     p_cleanup.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_cleanup.add_argument("--local-only", action="store_true", help="Only remove local artifacts, keep remote playlists")
 
@@ -197,12 +208,20 @@ def main(argv: list[str] | None = None) -> int:
                 interactive=not args.non_interactive,
                 emit_ui=not json_output,
                 restart=args.restart,
+                dry_run=args.dry_run,
             )
             if json_output:
                 emit_json("ok", "setup", result=result)
             else:
-                ui.success(f"Initialized workspace at {result['workspace']}")
-                ui.success("Initial playlist build completed.")
+                if result.get("dry_run"):
+                    ui.pretty(
+                        f"Dry-run setup: liked={result['liked_count']}, "
+                        f"would_create_playlists={result['would_create_playlists']}, "
+                        f"would_add_items={result['would_add_items']}, missing={result['missing']}"
+                    )
+                else:
+                    ui.success(f"Initialized workspace at {result['workspace']}")
+                    ui.success("Initial playlist build completed.")
             return 0
 
         if args.command == "sync":
@@ -213,9 +232,17 @@ def main(argv: list[str] | None = None) -> int:
                 mode=args.mode,
                 interactive=not args.non_interactive,
                 emit_ui=not json_output,
+                dry_run=args.dry_run,
             )
             if json_output:
                 emit_json("ok", "sync", result=result)
+            elif result.get("dry_run"):
+                ui.pretty(
+                    f"Dry-run sync: new_likes={result['new_likes']}, "
+                    f"would_add_items={result.get('would_add_items', 0)}, "
+                    f"would_mark_processed={result.get('would_mark_processed', 0)}, "
+                    f"missing={result.get('missing', 0)}"
+                )
             elif result.get("new_likes", 0) == 0:
                 ui.warning("No new liked songs found.")
             else:
@@ -225,16 +252,16 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
 
-        if args.command == "reset":
+        if args.command == "rebuild":
             if not json_output:
-                ui.title("ytmusic-organizer reset")
-            if args.non_interactive and not args.yes:
-                raise RuntimeError("--yes is required when --non-interactive is set for reset")
-            if not args.yes:
+                ui.title("ytmusic-organizer rebuild")
+            if args.non_interactive and not args.yes and not args.dry_run:
+                raise RuntimeError("--yes is required when --non-interactive is set for rebuild")
+            if not args.yes and not args.dry_run:
                 answer = input("This will delete managed playlists and rebuild. Continue? [y/N]: ").strip().lower()
                 if answer not in {"y", "yes"}:
                     if json_output:
-                        emit_json("cancelled", "reset", result={"message": "Cancelled by user"})
+                        emit_json("cancelled", "rebuild", result={"message": "Cancelled by user"})
                     else:
                         print()
                         ui.warning("Cancelled.")
@@ -244,25 +271,34 @@ def main(argv: list[str] | None = None) -> int:
                 mode=args.mode,
                 interactive=not args.non_interactive,
                 emit_ui=not json_output,
+                dry_run=args.dry_run,
             )
             if json_output:
-                emit_json("ok", "reset", result=result)
+                emit_json("ok", "rebuild", result=result)
             else:
-                ui.success(
-                    f"Full reset completed. Liked songs: {result['liked_count']}, "
-                    f"deleted playlists: {result['deleted_playlists']}"
-                )
-                if result.get("skipped_legacy"):
-                    ui.warning(
-                        "Skipped legacy managed playlist entries (name-only): "
-                        + ", ".join(result["skipped_legacy"])
+                if result.get("dry_run"):
+                    ui.pretty(
+                        f"Dry-run rebuild: liked={result['liked_count']}, "
+                        f"would_delete_playlists={result['would_delete_playlists']}, "
+                        f"would_create_playlists={result['would_create_playlists']}, "
+                        f"would_add_items={result['would_add_items']}, missing={result['missing']}"
                     )
+                else:
+                    ui.success(
+                        f"Rebuild completed. Liked songs: {result['liked_count']}, "
+                        f"deleted playlists: {result['deleted_playlists']}"
+                    )
+                    if result.get("skipped_legacy"):
+                        ui.warning(
+                            "Skipped legacy managed playlist entries (name-only): "
+                            + ", ".join(result["skipped_legacy"])
+                        )
             return 0
 
         if args.command == "cleanup":
             if not json_output:
                 ui.title("ytmusic-organizer cleanup")
-            if not args.yes:
+            if not args.yes and not args.dry_run:
                 answer = input(
                     "This will delete playlists managed by ytmusic-organizer and remove local managed files. Continue? [y/N]: "
                 ).strip().lower()
@@ -273,19 +309,26 @@ def main(argv: list[str] | None = None) -> int:
                         print()
                         ui.warning("Cancelled.")
                     return 1
-            result = run_cleanup(workspace=workspace, local_only=args.local_only)
+            result = run_cleanup(workspace=workspace, local_only=args.local_only, dry_run=args.dry_run)
             if json_output:
                 emit_json("ok", "cleanup", result=result)
             else:
-                ui.success(
-                    f"Cleanup completed. Deleted playlists: {result['deleted_playlists']}, "
-                    f"removed local files: {result['removed_local_files']}"
-                )
-                if result.get("skipped_legacy"):
-                    ui.warning(
-                        "Skipped legacy managed playlist entries (name-only): "
-                        + ", ".join(result["skipped_legacy"])
+                if result.get("dry_run"):
+                    ui.pretty(
+                        f"Dry-run cleanup: would_delete_playlists={result['would_delete_playlists']}, "
+                        f"would_remove_local_files={result['would_remove_local_files']}, "
+                        f"local_only={result['local_only']}"
                     )
+                else:
+                    ui.success(
+                        f"Cleanup completed. Deleted playlists: {result['deleted_playlists']}, "
+                        f"removed local files: {result['removed_local_files']}"
+                    )
+                    if result.get("skipped_legacy"):
+                        ui.warning(
+                            "Skipped legacy managed playlist entries (name-only): "
+                            + ", ".join(result["skipped_legacy"])
+                        )
             return 0
 
         if args.command == "stats":

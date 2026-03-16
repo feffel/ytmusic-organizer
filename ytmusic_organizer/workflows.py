@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 import termios
 from typing import Any, Callable
 
@@ -22,9 +23,14 @@ from .ytmusic_ops import (
     delete_managed_playlists,
     diagnose_plan_matches,
     export_liked,
+    export_liked_data,
     export_new_likes,
+    export_new_likes_data,
     initialize_state,
     make_ytmusic,
+    simulate_apply_new_likes,
+    simulate_apply_plan,
+    simulate_delete_managed_playlists,
     update_managed_playlists,
 )
 
@@ -46,9 +52,8 @@ def _set_bootstrap_completed(marker_path: Path, completed: bool = True) -> None:
     marker_path.write_text(json.dumps({"completed": completed}, indent=2), encoding="utf-8")
 
 
-def cleanup_local_artifacts(workspace: Path) -> int:
-    paths = WorkspacePaths(workspace)
-    to_remove = [
+def _cleanup_artifact_paths(paths: WorkspacePaths) -> list[Path]:
+    return [
         paths.state,
         paths.managed,
         paths.bootstrap,
@@ -61,6 +66,16 @@ def cleanup_local_artifacts(workspace: Path) -> int:
         paths.data_dir / "full_reset_prompt_filled.txt",
         paths.data_dir / "new_songs_prompt_filled.txt",
     ]
+
+
+def count_cleanup_local_artifacts(workspace: Path) -> int:
+    paths = WorkspacePaths(workspace)
+    return sum(1 for path in _cleanup_artifact_paths(paths) if path.exists())
+
+
+def cleanup_local_artifacts(workspace: Path) -> int:
+    paths = WorkspacePaths(workspace)
+    to_remove = _cleanup_artifact_paths(paths)
     removed = 0
     for path in to_remove:
         if path.exists():
@@ -85,6 +100,18 @@ def _resolve_auth_path(auth_file: str, workspace: Path) -> Path:
     if not path.is_absolute():
         path = (workspace / path).resolve()
     return path
+
+
+def _load_config_readonly(path: Path) -> Config:
+    if not path.exists():
+        return Config()
+    return load_or_create_config(path)
+
+
+def _create_temp_prompt_path(prefix: str) -> Path:
+    fd, raw_path = tempfile.mkstemp(prefix=prefix, suffix=".txt")
+    os.close(fd)
+    return Path(raw_path)
 
 
 def _parse_auth_headers_text(raw_text: str) -> dict[str, str]:
@@ -283,10 +310,64 @@ def run_setup(
     interactive: bool,
     emit_ui: bool = True,
     restart: bool = False,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     ui = WizardUI(enabled=emit_ui)
-
     paths = WorkspacePaths(workspace)
+
+    if dry_run:
+        if restart:
+            ui.warning("Ignoring --restart in dry-run mode.")
+        config = _load_config_readonly(paths.config)
+        if auth_file:
+            config.auth_file = auth_file
+        if mode:
+            config.classification_mode = mode
+        if interactive and not mode:
+            choice = input("Default classification mode [manual/api] (manual): ").strip().lower()
+            if choice in {"manual", "api"}:
+                config.classification_mode = choice
+
+        auth_path = _resolve_auth_path(config.auth_file, paths.root)
+        if not auth_path.exists():
+            explicit_auth_path = auth_file is not None
+            if explicit_auth_path:
+                raise FileNotFoundError(f"Auth file not found: {auth_path}")
+            raise FileNotFoundError(
+                f"Auth file not found: {auth_path}. Dry-run setup requires an existing auth file."
+            )
+
+        yt = make_ytmusic(auth_path)
+        selected_mode = _effective_mode(mode, config)
+        liked = export_liked_data(yt)
+        temp_prompt = _create_temp_prompt_path("ytmo-full-plan-")
+        try:
+            plan = _obtain_full_plan(
+                selected_mode,
+                config,
+                paths,
+                ui=ui,
+                interactive=interactive,
+                songs_override=liked,
+                prompt_path=temp_prompt,
+                persist_plan=False,
+            )
+        finally:
+            if temp_prompt.exists():
+                temp_prompt.unlink()
+        apply_result = simulate_apply_plan(yt, liked, plan, create_playlists=True)
+        results = apply_result.get("results", [])
+        return {
+            "dry_run": True,
+            "workspace": str(paths.root),
+            "liked_count": len(liked),
+            "playlists_in_plan": len(plan.get("playlists", [])),
+            "would_create_playlists": sum(1 for item in results if item.get("status") == "created"),
+            "would_reuse_playlists": sum(1 for item in results if item.get("status") == "reused"),
+            "would_add_items": sum(int(item.get("added", 0)) for item in results),
+            "missing": int(apply_result.get("missing", 0)),
+        }
+
     ensure_workspace_dirs(paths)
     state = SetupState(paths.setup_state)
     if restart:
@@ -335,7 +416,7 @@ def run_setup(
             ui.note("Resuming: auth step already completed")
 
         yt = make_ytmusic(auth_path)
-        mode = _effective_mode(mode, config)
+        selected_mode = _effective_mode(mode, config)
 
         if not state.is_step_done("liked_exported") or not paths.liked_songs.exists():
             ui.step("Export full liked songs")
@@ -348,7 +429,7 @@ def run_setup(
 
         if not state.is_step_done("plan_ready") or not paths.playlist_plan.exists():
             ui.step("Generate or wait for playlist plan")
-            _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive)
+            _obtain_full_plan(selected_mode, config, paths, ui=ui, interactive=interactive)
             state.mark_step("plan_ready")
             ui.success("Plan ready")
         else:
@@ -403,31 +484,38 @@ def _obtain_full_plan(
     paths: WorkspacePaths,
     ui: WizardUI | None = None,
     interactive: bool = True,
+    songs_override: list[dict[str, Any]] | None = None,
+    prompt_path: Path | None = None,
+    plan_output_path: Path | None = None,
+    persist_plan: bool = True,
 ) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_full_reset.txt")
-    songs = json.loads(paths.liked_songs.read_text(encoding="utf-8"))
+    songs = songs_override if songs_override is not None else json.loads(paths.liked_songs.read_text(encoding="utf-8"))
     prompt_text = render_prompt(
         template,
         {"[PASTE CONTENTS OF liked_songs.json HERE]": json.dumps(songs, ensure_ascii=False, indent=2)},
     )
-    prompt_path = paths.data_dir / "full_reset_prompt_filled.txt"
-    prompt_path.write_text(prompt_text, encoding="utf-8")
+    selected_prompt_path = prompt_path or (paths.data_dir / "full_reset_prompt_filled.txt")
+    selected_prompt_path.write_text(prompt_text, encoding="utf-8")
+    selected_plan_output = plan_output_path if plan_output_path is not None else (paths.playlist_plan if persist_plan else None)
 
     if mode == "manual":
         if ui:
             ui.step("Manual classification required")
-            ui.note(f"Open prompt file: {prompt_path}")
+            ui.note(f"Open prompt file: {selected_prompt_path}")
             ui.note("Paste model JSON into stdin and press Enter.")
             ui.note("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         else:
-            print("Open prompt file:", prompt_path)
+            print("Open prompt file:", selected_prompt_path)
             print("Paste model JSON into stdin and press Enter.")
             print("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         plan = read_json_from_stdin()
-        paths.playlist_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        if selected_plan_output:
+            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
-        paths.playlist_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        if selected_plan_output:
+            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return validate_full_plan(plan)
 
@@ -438,10 +526,15 @@ def _obtain_new_plan(
     paths: WorkspacePaths,
     ui: WizardUI | None = None,
     interactive: bool = True,
+    songs_override: list[dict[str, Any]] | None = None,
+    managed_override: list[str] | None = None,
+    prompt_path: Path | None = None,
+    plan_output_path: Path | None = None,
+    persist_plan: bool = True,
 ) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_new_songs.txt")
-    songs = json.loads(paths.new_likes.read_text(encoding="utf-8"))
-    managed = _load_managed_playlists(paths)
+    songs = songs_override if songs_override is not None else json.loads(paths.new_likes.read_text(encoding="utf-8"))
+    managed = managed_override if managed_override is not None else _load_managed_playlists(paths)
     playlist_lines = "\n".join(f"- {name}" for name in managed) if managed else "- (none)"
     prompt_text = render_prompt(
         template,
@@ -450,24 +543,27 @@ def _obtain_new_plan(
             "[PASTE CONTENTS OF new_likes.json HERE]": json.dumps(songs, ensure_ascii=False, indent=2),
         },
     )
-    prompt_path = paths.data_dir / "new_songs_prompt_filled.txt"
-    prompt_path.write_text(prompt_text, encoding="utf-8")
+    selected_prompt_path = prompt_path or (paths.data_dir / "new_songs_prompt_filled.txt")
+    selected_prompt_path.write_text(prompt_text, encoding="utf-8")
+    selected_plan_output = plan_output_path if plan_output_path is not None else (paths.new_plan if persist_plan else None)
 
     if mode == "manual":
         if ui:
             ui.step("Manual classification required")
-            ui.note(f"Open prompt file: {prompt_path}")
+            ui.note(f"Open prompt file: {selected_prompt_path}")
             ui.note("Paste model JSON into stdin and press Enter.")
             ui.note("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         else:
-            print("Open prompt file:", prompt_path)
+            print("Open prompt file:", selected_prompt_path)
             print("Paste model JSON into stdin and press Enter.")
             print("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         plan = read_json_from_stdin()
-        paths.new_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        if selected_plan_output:
+            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
-        paths.new_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        if selected_plan_output:
+            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return validate_new_plan(plan)
 
@@ -477,22 +573,72 @@ def run_weekly_sync(
     mode: str | None = None,
     interactive: bool = True,
     emit_ui: bool = True,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
-    ensure_workspace_dirs(paths)
+    if not dry_run:
+        ensure_workspace_dirs(paths)
     ensure_bootstrap_completed(paths.bootstrap)
 
-    config = load_or_create_config(paths.config)
-    mode = _effective_mode(mode, config)
+    config = _load_config_readonly(paths.config) if dry_run else load_or_create_config(paths.config)
+    selected_mode = _effective_mode(mode, config)
     auth_path = _resolve_auth_path(config.auth_file, paths.root)
+    if not auth_path.exists():
+        raise FileNotFoundError(f"Auth file not found: {auth_path}")
     yt = make_ytmusic(auth_path)
 
-    new_likes = export_new_likes(yt, paths.state, paths.new_likes)
+    if dry_run:
+        state_data = (
+            json.loads(paths.state.read_text(encoding="utf-8"))
+            if paths.state.exists()
+            else {"processed_video_ids": []}
+        )
+        processed_ids = set(state_data.get("processed_video_ids", []))
+        new_likes = export_new_likes_data(yt, processed_ids)
+    else:
+        new_likes = export_new_likes(yt, paths.state, paths.new_likes)
+
     if not new_likes:
+        if dry_run:
+            return {"dry_run": True, "new_likes": 0}
         return {"new_likes": 0}
 
     ui = WizardUI(enabled=emit_ui)
-    _obtain_new_plan(mode, config, paths, ui=ui, interactive=interactive)
+    if dry_run:
+        temp_prompt = _create_temp_prompt_path("ytmo-new-plan-")
+        managed = _load_managed_playlists(paths)
+        try:
+            plan = _obtain_new_plan(
+                selected_mode,
+                config,
+                paths,
+                ui=ui,
+                interactive=interactive,
+                songs_override=new_likes,
+                managed_override=managed,
+                prompt_path=temp_prompt,
+                persist_plan=False,
+            )
+        finally:
+            if temp_prompt.exists():
+                temp_prompt.unlink()
+        preview = simulate_apply_new_likes(
+            yt,
+            new_likes,
+            plan,
+            current_state=state_data,
+        )
+        results = preview.get("results", [])
+        return {
+            "dry_run": True,
+            "new_likes": len(new_likes),
+            "playlists_in_plan": len(plan.get("playlists", [])),
+            "would_add_items": sum(int(item.get("added", 0)) for item in results),
+            "would_mark_processed": int(preview.get("processed", 0)),
+            "missing": int(preview.get("missing", 0)),
+        }
+
+    _obtain_new_plan(selected_mode, config, paths, ui=ui, interactive=interactive)
     result = apply_new_likes(yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches)
     result["new_likes"] = len(new_likes)
     return result
@@ -503,18 +649,59 @@ def run_full_reset(
     mode: str | None = None,
     interactive: bool = True,
     emit_ui: bool = True,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
-    ensure_workspace_dirs(paths)
+    if not dry_run:
+        ensure_workspace_dirs(paths)
 
-    config = load_or_create_config(paths.config)
-    mode = _effective_mode(mode, config)
+    config = _load_config_readonly(paths.config) if dry_run else load_or_create_config(paths.config)
+    selected_mode = _effective_mode(mode, config)
     auth_path = _resolve_auth_path(config.auth_file, paths.root)
+    if not auth_path.exists():
+        raise FileNotFoundError(f"Auth file not found: {auth_path}")
     yt = make_ytmusic(auth_path)
 
-    liked = export_liked(yt, paths.liked_songs)
+    liked = export_liked_data(yt) if dry_run else export_liked(yt, paths.liked_songs)
     ui = WizardUI(enabled=emit_ui)
-    _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive)
+    if dry_run:
+        temp_prompt = _create_temp_prompt_path("ytmo-full-plan-")
+        try:
+            plan = _obtain_full_plan(
+                selected_mode,
+                config,
+                paths,
+                ui=ui,
+                interactive=interactive,
+                songs_override=liked,
+                prompt_path=temp_prompt,
+                persist_plan=False,
+            )
+        finally:
+            if temp_prompt.exists():
+                temp_prompt.unlink()
+
+        delete_result = simulate_delete_managed_playlists(yt, paths.managed)
+        apply_result = simulate_apply_plan(
+            yt=yt,
+            liked_tracks=liked,
+            plan=plan,
+            create_playlists=True,
+        )
+        results = apply_result.get("results", [])
+        return {
+            "dry_run": True,
+            "liked_count": len(liked),
+            "playlists_in_plan": len(plan.get("playlists", [])),
+            "would_delete_playlists": int(delete_result.get("would_delete", 0)),
+            "skipped_legacy_count": len(delete_result.get("skipped_legacy", [])),
+            "skipped_legacy": delete_result.get("skipped_legacy", []),
+            "would_create_playlists": sum(1 for item in results if item.get("status") == "created"),
+            "would_add_items": sum(int(item.get("added", 0)) for item in results),
+            "missing": int(apply_result.get("missing", 0)),
+        }
+
+    _obtain_full_plan(selected_mode, config, paths, ui=ui, interactive=interactive)
 
     delete_result = delete_managed_playlists(yt, paths.managed)
     apply_result = apply_plan(
@@ -535,9 +722,34 @@ def run_full_reset(
     }
 
 
-def run_cleanup(workspace: Path, local_only: bool = False) -> dict[str, Any]:
+def run_cleanup(workspace: Path, local_only: bool = False, dry_run: bool = False) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
-    ensure_workspace_dirs(paths)
+    if not dry_run:
+        ensure_workspace_dirs(paths)
+    return _run_cleanup(paths=paths, local_only=local_only, dry_run=dry_run)
+
+
+def _run_cleanup(paths: WorkspacePaths, local_only: bool = False, dry_run: bool = False) -> dict[str, Any]:
+    if dry_run:
+        would_remove = count_cleanup_local_artifacts(paths.root)
+        preview = {"would_delete": 0, "skipped_legacy": []}
+        if not local_only:
+            preview = simulate_delete_managed_playlists(None, paths.managed)
+            # Resolve against live library only when auth is available.
+            if preview.get("would_delete", 0) > 0:
+                config = _load_config_readonly(paths.config)
+                auth_path = _resolve_auth_path(config.auth_file, paths.root)
+                if auth_path.exists():
+                    yt = make_ytmusic(auth_path)
+                    preview = simulate_delete_managed_playlists(yt, paths.managed)
+        return {
+            "dry_run": True,
+            "local_only": local_only,
+            "would_delete_playlists": int(preview.get("would_delete", 0)),
+            "would_remove_local_files": would_remove,
+            "skipped_legacy_count": len(preview.get("skipped_legacy", [])),
+            "skipped_legacy": preview.get("skipped_legacy", []),
+        }
 
     deleted = 0
     skipped_legacy: list[str] = []

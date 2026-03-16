@@ -33,14 +33,24 @@ All mutable state lives in the workspace (`config.toml`, `state.json`, `managed_
 - Setup:
   - `ytmo setup --non-interactive --mode manual --json`
   - `ytmo setup --non-interactive --mode api --json`
+  - `ytmo setup --non-interactive --mode manual --dry-run --json`
+  - `ytmo setup --non-interactive --mode api --dry-run --json`
 - Weekly sync:
   - `ytmo sync --non-interactive --mode manual --json`
   - `ytmo sync --non-interactive --mode api --json`
-- Full reset (destructive):
-  - `ytmo reset --yes --non-interactive --mode manual --json`
-  - `ytmo reset --yes --non-interactive --mode api --json`
+- Weekly sync dry-run:
+  - `ytmo sync --non-interactive --mode manual --dry-run --json`
+  - `ytmo sync --non-interactive --mode api --dry-run --json`
+- Rebuild (destructive):
+  - `ytmo rebuild --yes --non-interactive --mode manual --json`
+  - `ytmo rebuild --yes --non-interactive --mode api --json`
+- Rebuild dry-run:
+  - `ytmo rebuild --non-interactive --mode manual --dry-run --json`
+  - `ytmo rebuild --non-interactive --mode api --dry-run --json`
 - Cleanup:
   - `ytmo cleanup --yes --local-only --json`
+  - `ytmo cleanup --dry-run --json`
+  - `ytmo cleanup --local-only --dry-run --json`
 - Stats:
   - `ytmo stats --json`
   - `ytmo stats --plan /absolute/path/to/plan.json --json`
@@ -65,6 +75,12 @@ Success shape:
 {"status":"ok","command":"sync","result":{"new_likes":3,"missing":1}}
 ```
 
+Dry-run cleanup success shape:
+
+```json
+{"status":"ok","command":"cleanup","result":{"dry_run":true,"would_delete_playlists":2,"would_remove_local_files":6,"skipped_legacy_count":0,"local_only":false}}
+```
+
 Error shape:
 
 ```json
@@ -74,7 +90,7 @@ Error shape:
 Cancelled shape:
 
 ```json
-{"status":"cancelled","command":"reset","result":{"message":"Cancelled by user"}}
+{"status":"cancelled","command":"rebuild","result":{"message":"Cancelled by user"}}
 ```
 
 Stats success shape:

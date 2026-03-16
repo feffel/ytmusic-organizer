@@ -73,7 +73,8 @@ ytmo setup
 
 Safety model:
 - This tool only deletes playlists tracked in `managed_playlists.json` (by playlist ID).
-- `reset` and `cleanup` are destructive and require explicit confirmation unless `--yes` is passed.
+- `rebuild` and `cleanup` are destructive and require explicit confirmation unless `--yes` is passed.
+- `--dry-run` is available for `setup`, `sync`, `rebuild`, and `cleanup` to simulate changes safely.
 
 The wizard handles auth setup and writes auth to `<workspace>/browser.json` by default.
 If you already have an auth file, pass it explicitly:
@@ -91,7 +92,7 @@ ytmo sync
 3. For full destructive rebuild:
 
 ```bash
-ytmo reset --yes
+ytmo rebuild --yes
 ```
 
 Typical weekly commands:
@@ -108,16 +109,17 @@ ytmo sync --mode api
 
 ## Commands
 
-- `ytmo setup [--mode manual|api] [--auth-file PATH] [--non-interactive] [--restart]`
-- `ytmo sync [--mode manual|api] [--non-interactive]`
-- `ytmo reset [--yes] [--mode manual|api] [--non-interactive]`
-- `ytmo cleanup [--yes] [--local-only]`
+- `ytmo setup [--mode manual|api] [--auth-file PATH] [--non-interactive] [--restart] [--dry-run]`
+- `ytmo sync [--mode manual|api] [--non-interactive] [--dry-run]`
+- `ytmo rebuild [--yes] [--mode manual|api] [--non-interactive] [--dry-run]`
+- `ytmo cleanup [--yes] [--local-only] [--dry-run]`
 - `ytmo stats [--plan PATH]` (non-failing diagnostics against workspace or custom plan)
 
 Common option:
 
 - `--workspace` (default `~/.ytmusic-organizer`)
 - `--json` (machine-readable output; keeps default Rich output unchanged when omitted)
+- `--dry-run` (simulate without mutating remote playlists or workspace files)
 - `--version` (print installed CLI version)
 
 `--json` example:
@@ -152,9 +154,10 @@ Run with `--mode api` to auto-generate plan JSON.
 ## Safety and state
 
 - `ytmo setup` is create-only (non-destructive).
-- `ytmo reset` is destructive and requires confirmation unless `--yes` is passed.
+- `ytmo rebuild` is destructive and requires confirmation unless `--yes` is passed.
 - `ytmo sync` requires completed setup and will instruct if missing.
 - `ytmo cleanup` deletes playlists managed by this tool and removes local managed artifacts.
+- `--dry-run` mode for `setup/sync/rebuild/cleanup` performs read-only simulation (manual mode uses temporary prompt files outside workspace).
 - `ytmo stats` is read-only and never rewrites `data/missing_matches.json`.
 
 ## Local workspace files

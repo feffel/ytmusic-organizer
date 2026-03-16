@@ -7,6 +7,33 @@ import unittest
 
 
 class CliJsonOutputTests(unittest.TestCase):
+    def test_cleanup_dry_run_json_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "cleanup",
+                    "--workspace",
+                    str(workspace),
+                    "--dry-run",
+                    "--json",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout.strip())
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["command"], "cleanup")
+            self.assertTrue(payload["result"]["dry_run"])
+            self.assertIn("would_delete_playlists", payload["result"])
+            self.assertIn("would_remove_local_files", payload["result"])
+            self.assertIn("local_only", payload["result"])
+
     def test_cleanup_local_only_json_success(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
@@ -31,6 +58,34 @@ class CliJsonOutputTests(unittest.TestCase):
             self.assertEqual(payload["status"], "ok")
             self.assertEqual(payload["command"], "cleanup")
             self.assertIn("removed_local_files", payload["result"])
+
+    def test_rebuild_dry_run_json_skips_yes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "rebuild",
+                    "--workspace",
+                    str(workspace),
+                    "--mode",
+                    "manual",
+                    "--non-interactive",
+                    "--dry-run",
+                    "--json",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                input='{"playlists": []}\n',
+            )
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(result.stdout.strip())
+            self.assertEqual(payload["status"], "error")
+            self.assertEqual(payload["command"], "rebuild")
+            self.assertNotIn("--yes is required", payload["error"])
 
     def test_setup_json_error_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -4,11 +4,12 @@
 It supports:
 - guided first-time setup (`ytmo setup`)
 - incremental weekly sync (`ytmo sync`)
-- destructive rebuild (`ytmo reset`)
+- destructive rebuild (`ytmo rebuild`)
 - cleanup (`ytmo cleanup`)
 - local workspace reporting (`ytmo stats`)
 - installed version output (`ytmo --version`)
 - optional machine-readable command responses (`--json`)
+- safe simulation mode (`--dry-run`) for setup/sync/rebuild/cleanup
 
 Runtime state is workspace-centric: mutable files live under a workspace directory (default `~/.ytmusic-organizer/`).
 
@@ -30,8 +31,8 @@ Implementation location:
 - Orchestration: `ytmusic_organizer/workflows.py` (`run_weekly_sync`)
 - Core ops: `ytmusic_organizer/ytmusic_ops.py`
 
-## Full Reset
-Primary entrypoint: `ytmo reset --yes`.
+## Full Rebuild
+Primary entrypoint: `ytmo rebuild --yes`.
 
 Flow:
 1. Export full likes via `export_liked(...)` into `data/liked_songs.json`.
@@ -68,7 +69,7 @@ Source of truth for which playlists this tool is allowed to delete/manage (by ID
 
 - `data/playlist_plan.json`
 Type: generated or user-supplied plan artifact.
-Produced by manual/API classification for full setup/reset.
+Produced by manual/API classification for full setup/rebuild.
 
 - `data/new_plan.json`
 Type: generated or user-supplied incremental plan artifact.
@@ -80,7 +81,7 @@ Contains only likes not yet in `state.json`.
 
 - `data/liked_songs.json`
 Type: generated intermediate artifact.
-Full liked-song export snapshot at setup/reset time.
+Full liked-song export snapshot at setup/rebuild time.
 
 - `data/missing_matches.json`
 Type: generated diagnostic artifact.
@@ -126,12 +127,16 @@ Writes: `state.json`.
 Reads: `managed_playlists.json`, current library playlists.
 Writes: remote playlist deletions by playlist ID only; legacy name-only entries are skipped conservatively.
 
+- `ytmusic_organizer/ytmusic_ops.py::simulate_delete_managed_playlists`
+Reads: `managed_playlists.json`, optionally current library playlists.
+Writes: none (returns would-delete counts for dry-run).
+
 - `ytmusic_organizer/ytmusic_ops.py::update_managed_playlists`
 Reads: `data/playlist_plan.json`.
 Writes: `managed_playlists.json`.
 
 - `ytmusic_organizer/workflows.py`
-Orchestration for setup/sync/reset/cleanup/stats.
+Orchestration for setup/sync/rebuild/cleanup/stats and dry-run simulation paths.
 
 - `ytmusic_organizer/cli.py`
 Command parsing and user-facing flow control.
@@ -163,7 +168,7 @@ Canonical execution paths:
 Current `Makefile` targets are:
 - `make setup` -> `ytmo setup`
 - `make sync` -> `ytmo sync`
-- `make reset` -> `ytmo reset`
+- `make rebuild` -> `ytmo rebuild`
 - `make cleanup` -> `ytmo cleanup`
 - `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
@@ -190,7 +195,7 @@ CI automation:
 
 # Data Flow
 ## `data/liked_songs.json`
-- Created during setup/reset.
+- Created during setup/rebuild.
 - Represents full snapshot of liked songs.
 - Input to full-plan matching and state initialization.
 
@@ -203,9 +208,9 @@ CI automation:
 - Input to managed playlist index generation and playlist application.
 
 ## `state.json`
-- Initialized from full liked snapshot during setup/reset.
+- Initialized from full liked snapshot during setup/rebuild.
 - Incrementally updated in sync with matched new IDs.
-- Monotonic growth in normal weekly usage; reset rewrites from fresh full export.
+- Monotonic growth in normal weekly usage; rebuild rewrites from fresh full export.
 
 ## `data/new_plan.json`
 - Incremental classification plan for only `new_likes.json` items.
@@ -220,9 +225,11 @@ CI automation:
 - Do not overwrite or expose `browser.json`.
 - Interactive auth setup captures paste in non-canonical TTY mode (to avoid long-line truncation), and both TTY/non-TTY now share one header-collection state machine: auto-detect JSON-vs-raw input, complete on closing `}` (JSON) or blank line (raw), and validate required keys (`cookie`, `x-goog-authuser`) before writing auth.
 - Interactive manual plan input no longer depends on EOF signals; it accepts line-based paste, auto-submits once JSON parses, and allows blank-line submit for raw/fenced retries.
-- `state.json` should only grow during incremental sync; full reset intentionally reinitializes it.
-- `ytmo reset` and `ytmo cleanup` are destructive by design and require explicit confirmation unless `--yes` is passed.
+- `state.json` should only grow during incremental sync; full rebuild intentionally reinitializes it.
+- `ytmo rebuild` and `ytmo cleanup` are destructive by design and require explicit confirmation unless `--yes` is passed.
 - `ytmo setup` is non-destructive for existing remote playlists (create/populate only).
+- `--dry-run` for setup/sync/rebuild/cleanup performs read-only simulation: no remote playlist mutations and no workspace writes.
+- Manual-mode dry-run writes prompt text only to temporary files outside workspace and auto-deletes them.
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
@@ -236,12 +243,11 @@ CI automation:
 - Legacy managed playlist files without schema v2 are not auto-deleted for safety.
 
 # Improvement Ideas
-- Add Make aliases `weekly-sync` and `full-reset` (or document naming migration in CLI help output).
+- Add Make aliases `weekly-sync` and `full-rebuild` (or document naming migration in CLI help output).
 - Add explicit versioned JSON schemas for plan/state files and validate on every read.
 - Add idempotency markers/history for sync runs (timestamps, counts, run IDs).
 - Add optional quarantine flow for unmatched new likes to avoid repeated manual rematching.
-- Add dry-run mode for reset/cleanup showing exact playlists that would be deleted.
-- Add tests covering full sync/reset orchestration with fixture workspaces.
+- Add tests covering full sync/rebuild orchestration with fixture workspaces.
 - Harden matching by incorporating album/duration similarity scoring.
 
 # Maintenance Rule For Future Codex Runs

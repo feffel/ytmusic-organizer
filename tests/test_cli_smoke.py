@@ -17,6 +17,7 @@ class CliSmokeTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0)
         self.assertIn("sync", result.stdout)
+        self.assertIn("rebuild", result.stdout)
         self.assertIn("cleanup", result.stdout)
         self.assertIn("--version", result.stdout)
         self.assertIn(__version__, result.stdout)
@@ -55,11 +56,11 @@ class CliSmokeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 2, msg=result.stderr)
             self.assertIn("Auth file is missing", result.stderr)
 
-    def test_reset_cancelled_warning_renders_on_new_line(self) -> None:
+    def test_rebuild_cancelled_warning_renders_on_new_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             result = subprocess.run(
-                [sys.executable, "-m", "ytmusic_organizer.cli", "reset", "--workspace", str(workspace)],
+                [sys.executable, "-m", "ytmusic_organizer.cli", "rebuild", "--workspace", str(workspace)],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -67,6 +68,39 @@ class CliSmokeTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertIn("\nWARN Cancelled.", result.stdout)
+
+    def test_reset_command_is_removed(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "reset"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid choice", result.stderr)
+
+    def test_rebuild_dry_run_skips_yes_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "rebuild",
+                    "--workspace",
+                    str(workspace),
+                    "--dry-run",
+                    "--non-interactive",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                input='{"playlists": []}\n',
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertNotIn("--yes is required", result.stderr)
+            self.assertIn("Auth file is missing", result.stderr)
 
     def test_cleanup_cancelled_warning_renders_on_new_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
