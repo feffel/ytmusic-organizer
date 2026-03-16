@@ -20,7 +20,7 @@ Flow:
 1. Load workspace config and auth.
 2. Export only new likes via `export_new_likes(...)` by diffing current likes against `state.json` (`processed_video_ids`).
 3. Classification step:
-- Manual mode: writes `data/new_songs_prompt_filled.txt`, then reads plan JSON from stdin and saves `data/new_plan.json`.
+- Manual mode: writes `data/new_songs_prompt_filled.txt`, then reads plan JSON from stdin and saves `data/new_plan.json` (interactive entry auto-completes on valid JSON; blank line can submit raw/fenced attempts).
 - API mode: calls OpenAI and writes `data/new_plan.json`.
 4. Apply mapped songs to existing managed playlists via `apply_new_likes(...)`.
 5. Update `state.json` with matched new video IDs.
@@ -36,7 +36,7 @@ Primary entrypoint: `ytmo reset --yes`.
 Flow:
 1. Export full likes via `export_liked(...)` into `data/liked_songs.json`.
 2. Classification step:
-- Manual mode: writes `data/full_reset_prompt_filled.txt`, then reads plan JSON from stdin and saves `data/playlist_plan.json`.
+- Manual mode: writes `data/full_reset_prompt_filled.txt`, then reads plan JSON from stdin and saves `data/playlist_plan.json` (interactive entry auto-completes on valid JSON; blank line can submit raw/fenced attempts).
 - API mode: calls OpenAI and writes `data/playlist_plan.json`.
 3. Delete previously managed playlists via `delete_managed_playlists(...)` (ID-based targeting).
 4. Recreate/populate playlists via `apply_plan(...)`.
@@ -54,6 +54,7 @@ Note: below paths are workspace-relative (default `~/.ytmusic-organizer/`) unles
 - `browser.json`
 Type: source/input secret auth file.
 Used by `ytmusicapi` session creation. Must be preserved.
+Interactive setup now accepts either raw `Header: value` lines or JSON-style header objects from browser tools, then normalizes before writing auth.
 
 - `state.json`
 Type: generated persistent state.
@@ -219,6 +220,8 @@ CI automation:
 - Only delete playlists whose IDs are listed in `managed_playlists.json` schema v2.
 - Never delete arbitrary playlists outside managed index.
 - Do not overwrite or expose `browser.json`.
+- Interactive auth setup captures paste in non-canonical TTY mode (to avoid long-line truncation), and both TTY/non-TTY now share one header-collection state machine: auto-detect JSON-vs-raw input, complete on closing `}` (JSON) or blank line (raw), and validate required keys (`cookie`, `x-goog-authuser`) before writing auth.
+- Interactive manual plan input no longer depends on EOF signals; it accepts line-based paste, auto-submits once JSON parses, and allows blank-line submit for raw/fenced retries.
 - `state.json` should only grow during incremental sync; full reset intentionally reinitializes it.
 - `ytmo reset` and `ytmo cleanup` are destructive by design and require explicit confirmation unless `--yes` is passed.
 - `ytmo setup` is non-destructive for existing remote playlists (create/populate only).

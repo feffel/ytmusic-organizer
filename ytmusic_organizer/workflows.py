@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import importlib.resources
 import json
+import os
 from pathlib import Path
-from typing import Any
+import sys
+import termios
+from typing import Any, Callable
 
 from ytmusicapi import setup as ytmusic_setup
 
@@ -84,6 +87,179 @@ def _resolve_auth_path(auth_file: str, workspace: Path) -> Path:
     return path
 
 
+def _parse_auth_headers_text(raw_text: str) -> dict[str, str]:
+    text = raw_text.strip()
+    if not text:
+        raise RuntimeError("AUTH_HEADERS_INVALID::No headers were provided.")
+
+    headers: dict[str, str] = {}
+
+    if text.lstrip().startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+
+        if isinstance(parsed, dict):
+            for key, value in parsed.items():
+                normalized_key = str(key).strip().strip('"').strip("'").lower()
+                normalized_value = str(value).strip()
+                if normalized_key and normalized_value:
+                    headers[normalized_key] = normalized_value
+        elif parsed is not None:
+            raise RuntimeError("AUTH_HEADERS_INVALID::Headers JSON must be an object.")
+
+    if not headers:
+        for line in text.splitlines():
+            entry = line.strip()
+            if not entry or entry in {"{", "}"}:
+                continue
+            if entry.endswith(","):
+                entry = entry[:-1].rstrip()
+            if ":" not in entry:
+                continue
+
+            key, value = entry.split(":", 1)
+            normalized_key = key.strip().strip('"').strip("'").lower()
+            normalized_value = value.strip().strip('"').strip("'")
+            if normalized_key and normalized_value:
+                headers[normalized_key] = normalized_value
+
+    required = {"cookie", "x-goog-authuser"}
+    missing = sorted(required - set(headers.keys()))
+    if missing:
+        raise RuntimeError(
+            "AUTH_HEADERS_INVALID::Missing required header(s): " + ", ".join(missing)
+        )
+
+    return headers
+
+
+def _normalize_auth_headers(raw_text: str) -> str:
+    headers = _parse_auth_headers_text(raw_text)
+    return "\n".join(f"{key}: {value}" for key, value in headers.items())
+
+
+def _brace_delta(value: str) -> int:
+    return value.count("{") - value.count("}")
+
+
+def _normalize_completed_json_headers(raw_text: str) -> str:
+    try:
+        json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("AUTH_HEADERS_INVALID::Headers JSON is incomplete or malformed.") from exc
+    return _normalize_auth_headers(raw_text)
+
+
+def _collect_auth_headers_from_line_reader(read_line: Callable[[], str]) -> str:
+    raw_lines: list[str] = []
+    json_lines: list[str] = []
+    mode: str | None = None
+    balance = 0
+
+    while True:
+        try:
+            line = read_line()
+        except EOFError:
+            break
+
+        stripped = line.strip()
+        if mode is None:
+            if not stripped:
+                continue
+            if stripped.startswith("{"):
+                mode = "json"
+                json_lines.append(line)
+                balance += _brace_delta(line)
+                if balance <= 0:
+                    return _normalize_completed_json_headers("\n".join(json_lines))
+            else:
+                mode = "raw"
+                raw_lines.append(line)
+            continue
+
+        if mode == "json":
+            json_lines.append(line)
+            balance += _brace_delta(line)
+            if balance <= 0:
+                return _normalize_completed_json_headers("\n".join(json_lines))
+            continue
+
+        if not stripped:
+            return _normalize_auth_headers("\n".join(raw_lines))
+        raw_lines.append(line)
+
+    if mode == "json":
+        return _normalize_completed_json_headers("\n".join(json_lines))
+    return _normalize_auth_headers("\n".join(raw_lines))
+
+
+def _iter_tty_lines(fd: int):
+    current: list[str] = []
+    while True:
+        chunk = os.read(fd, 1)
+        if not chunk:
+            break
+
+        char = chunk.decode("utf-8", errors="ignore")
+        if char == "\x04":  # EOT fallback
+            break
+
+        if char in {"\r", "\n"}:
+            yield "".join(current)
+            current = []
+            continue
+
+        current.append(char)
+
+    if current:
+        yield "".join(current)
+
+
+def _collect_auth_headers_from_tty() -> str:
+    fd = sys.stdin.fileno()
+    original = termios.tcgetattr(fd)
+    new_mode = termios.tcgetattr(fd)
+    new_mode[3] &= ~termios.ICANON  # lflag
+    new_mode[6][termios.VMIN] = 1
+    new_mode[6][termios.VTIME] = 0
+
+    try:
+        termios.tcsetattr(fd, termios.TCSANOW, new_mode)
+        tty_lines = iter(_iter_tty_lines(fd))
+
+        def read_line() -> str:
+            try:
+                return next(tty_lines)
+            except StopIteration as exc:
+                raise EOFError from exc
+
+        return _collect_auth_headers_from_line_reader(read_line)
+    finally:
+        termios.tcsetattr(fd, termios.TCSANOW, original)
+
+
+def _collect_auth_headers_from_stdin(ui: WizardUI | None = None) -> str:
+    if ui:
+        ui.note("Paste request headers and press Enter.")
+        ui.note("JSON input auto-completes when closing '}' is pasted.")
+        ui.note("Raw header lines complete when you enter one blank line.")
+        ui.note('Accepted format 1: cookie: <value>  |  x-goog-authuser: 1')
+        ui.note('Accepted format 2: {"cookie":"<value>","x-goog-authuser":"1",...}')
+    else:
+        print("Paste request headers and press Enter.")
+        print("JSON input auto-completes when closing '}' is pasted.")
+        print("Raw header lines complete when you enter one blank line.")
+        print("Accepted format 1: cookie: <value>  |  x-goog-authuser: 1")
+        print('Accepted format 2: {"cookie":"<value>","x-goog-authuser":"1",...}')
+
+    if sys.stdin.isatty():
+        return _collect_auth_headers_from_tty()
+
+    return _collect_auth_headers_from_line_reader(input)
+
+
 def _load_managed_playlists(paths: WorkspacePaths) -> list[str]:
     if not paths.managed.exists():
         return []
@@ -148,7 +324,8 @@ def run_setup(
                 ui.warning("No auth file found in workspace.")
                 ui.note("Starting interactive auth setup (ytmusicapi).")
                 ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
-                ytmusic_setup(filepath=str(auth_path))
+                headers_raw = _collect_auth_headers_from_stdin(ui=ui)
+                ytmusic_setup(filepath=str(auth_path), headers_raw=headers_raw)
 
                 if not auth_path.exists():
                     raise FileNotFoundError(f"Auth setup did not create file: {auth_path}")
@@ -240,10 +417,12 @@ def _obtain_full_plan(
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {prompt_path}")
-            ui.note("Paste model JSON into stdin and press Ctrl-D when done.")
+            ui.note("Paste model JSON into stdin and press Enter.")
+            ui.note("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         else:
             print("Open prompt file:", prompt_path)
-            print("Paste model JSON into stdin and press Ctrl-D when done.")
+            print("Paste model JSON into stdin and press Enter.")
+            print("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         plan = read_json_from_stdin()
         paths.playlist_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
@@ -278,10 +457,12 @@ def _obtain_new_plan(
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {prompt_path}")
-            ui.note("Paste model JSON into stdin and press Ctrl-D when done.")
+            ui.note("Paste model JSON into stdin and press Enter.")
+            ui.note("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         else:
             print("Open prompt file:", prompt_path)
-            print("Paste model JSON into stdin and press Ctrl-D when done.")
+            print("Paste model JSON into stdin and press Enter.")
+            print("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
         plan = read_json_from_stdin()
         paths.new_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
