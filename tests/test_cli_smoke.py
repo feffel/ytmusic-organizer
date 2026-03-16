@@ -23,6 +23,10 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("--version", result.stdout)
         self.assertIn(__version__, result.stdout)
         self.assertNotIn("preview", result.stdout)
+        self.assertIn("Most common commands:", result.stdout)
+        self.assertIn("ytmo setup", result.stdout)
+        self.assertIn("ytmo sync", result.stdout)
+        self.assertIn("ytmo rebuild --dry-run", result.stdout)
 
     def test_version_runs(self) -> None:
         result = subprocess.run(
@@ -61,7 +65,14 @@ class CliSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             result = subprocess.run(
-                [sys.executable, "-m", "ytmusic_organizer.cli", "rebuild", "--workspace", str(workspace)],
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "rebuild",
+                    "--workspace",
+                    str(workspace),
+                ],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -107,7 +118,14 @@ class CliSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             result = subprocess.run(
-                [sys.executable, "-m", "ytmusic_organizer.cli", "cleanup", "--workspace", str(workspace)],
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "cleanup",
+                    "--workspace",
+                    str(workspace),
+                ],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -120,13 +138,20 @@ class CliSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             result = subprocess.run(
-                [sys.executable, "-m", "ytmusic_organizer.cli", "demo", "--workspace", str(workspace)],
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "demo",
+                    "--workspace",
+                    str(workspace),
+                ],
                 check=False,
                 capture_output=True,
                 text=True,
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr)
-            self.assertIn("DEMO ONLY", result.stdout)
+            self.assertIn("Demo mode only", result.stdout)
             self.assertFalse(workspace.exists())
 
     def test_demo_runs_for_manual_and_api_modes(self) -> None:

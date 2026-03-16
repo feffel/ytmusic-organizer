@@ -33,7 +33,9 @@ def artist_match(plan_artist: str, track_artists: list[str]) -> bool:
     return any(pa in a or a in pa for a in tas)
 
 
-def find_match(song: dict[str, Any], source_tracks: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+def find_match(
+    song: dict[str, Any], source_tracks: list[dict[str, Any]]
+) -> tuple[dict[str, Any] | None, str]:
     plan_title = song.get("title", "")
     plan_artist = song.get("artist", "")
 

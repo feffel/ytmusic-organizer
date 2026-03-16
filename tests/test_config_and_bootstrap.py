@@ -11,7 +11,9 @@ class ConfigAndBootstrapTests(unittest.TestCase):
     def test_config_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
-            cfg = Config(auth_file="browser.json", classification_mode="manual", openai_model="gpt-4.1-mini")
+            cfg = Config(
+                auth_file="browser.json", classification_mode="manual", openai_model="gpt-4.1-mini"
+            )
             save_config(path, cfg)
             loaded = load_or_create_config(path)
             self.assertEqual(loaded, cfg)
@@ -33,9 +35,14 @@ class ConfigAndBootstrapTests(unittest.TestCase):
             with (
                 patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
                 patch("ytmusic_organizer.workflows.export_liked", return_value=[]),
-                patch("ytmusic_organizer.workflows._obtain_full_plan", return_value={"playlists": []}),
+                patch(
+                    "ytmusic_organizer.workflows._obtain_full_plan", return_value={"playlists": []}
+                ),
                 patch("ytmusic_organizer.workflows.update_managed_playlists", return_value=[]),
-                patch("ytmusic_organizer.workflows.apply_plan", return_value={"results": [], "missing": 0}),
+                patch(
+                    "ytmusic_organizer.workflows.apply_plan",
+                    return_value={"results": [], "missing": 0},
+                ),
                 patch("ytmusic_organizer.workflows.initialize_state", return_value=None),
             ):
                 result = run_setup(
@@ -94,9 +101,14 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                 patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
                 patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
                 patch("ytmusic_organizer.workflows.export_liked", return_value=[]),
-                patch("ytmusic_organizer.workflows._obtain_full_plan", return_value={"playlists": []}),
+                patch(
+                    "ytmusic_organizer.workflows._obtain_full_plan", return_value={"playlists": []}
+                ),
                 patch("ytmusic_organizer.workflows.update_managed_playlists", return_value=[]),
-                patch("ytmusic_organizer.workflows.apply_plan", return_value={"results": [], "missing": 0}),
+                patch(
+                    "ytmusic_organizer.workflows.apply_plan",
+                    return_value={"results": [], "missing": 0},
+                ),
                 patch("ytmusic_organizer.workflows.initialize_state", return_value=None),
             ):
                 run_setup(
@@ -117,7 +129,7 @@ class ConfigAndBootstrapTests(unittest.TestCase):
 
             pasted_lines = iter(
                 [
-                    'cookie: a=b; c=d',
+                    "cookie: a=b; c=d",
                 ]
             )
 
@@ -135,7 +147,10 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                         mode="manual",
                         interactive=True,
                     )
-            self.assertIn("AUTH_HEADERS_INVALID::Missing required header(s): x-goog-authuser", str(ctx.exception))
+            self.assertIn(
+                "AUTH_HEADERS_INVALID::Missing required header(s): x-goog-authuser",
+                str(ctx.exception),
+            )
 
 
 if __name__ == "__main__":

@@ -63,30 +63,30 @@ def read_json_from_stdin() -> dict[str, Any]:
         if not raw.strip():
             if interactive:
                 print(
-                    "No JSON received on stdin. Paste JSON and submit with Enter (use a blank line if needed).",
+                    "No JSON received. Paste JSON and press Enter (use a blank line if needed).",
                     file=sys.stderr,
                 )
                 continue
-            raise ValueError("No JSON received on stdin")
+            raise ValueError("No JSON received")
         try:
             value = _extract_json(raw)
         except Exception as exc:
             if interactive:
                 print(
-                    f"Invalid JSON from stdin: {exc}. Paste valid JSON and submit again.",
+                    f"Invalid JSON input: {exc}. Paste valid JSON and try again.",
                     file=sys.stderr,
                 )
                 continue
-            raise ValueError(f"Invalid JSON from stdin: {exc}") from exc
+            raise ValueError(f"Invalid JSON input: {exc}") from exc
 
         if not isinstance(value, dict):
             if interactive:
                 print(
-                    "Invalid JSON from stdin: top-level value must be an object. Paste valid JSON and submit again.",
+                    "Invalid JSON input: top-level value must be an object. Paste valid JSON and try again.",
                     file=sys.stderr,
                 )
                 continue
-            raise ValueError("Invalid JSON from stdin: top-level value must be an object")
+            raise ValueError("Invalid JSON input: top-level value must be an object")
         return value
 
 

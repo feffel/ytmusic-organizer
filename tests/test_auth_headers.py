@@ -49,13 +49,17 @@ class AuthHeaderNormalizationTests(unittest.TestCase):
         raw = "x-goog-authuser: 1"
         with self.assertRaises(RuntimeError) as ctx:
             _normalize_auth_headers(raw)
-        self.assertIn("AUTH_HEADERS_INVALID::Missing required header(s): cookie", str(ctx.exception))
+        self.assertIn(
+            "AUTH_HEADERS_INVALID::Missing required header(s): cookie", str(ctx.exception)
+        )
 
     def test_rejects_missing_authuser(self) -> None:
         raw = "cookie: a=b"
         with self.assertRaises(RuntimeError) as ctx:
             _normalize_auth_headers(raw)
-        self.assertIn("AUTH_HEADERS_INVALID::Missing required header(s): x-goog-authuser", str(ctx.exception))
+        self.assertIn(
+            "AUTH_HEADERS_INVALID::Missing required header(s): x-goog-authuser", str(ctx.exception)
+        )
 
     def test_handles_quotes_and_trailing_commas(self) -> None:
         raw = "\n".join(
@@ -102,7 +106,9 @@ class AuthHeaderNormalizationTests(unittest.TestCase):
         )
         with self.assertRaises(RuntimeError) as ctx:
             _collect_auth_headers_from_line_reader(line_reader)
-        self.assertIn("AUTH_HEADERS_INVALID::Headers JSON is incomplete or malformed.", str(ctx.exception))
+        self.assertIn(
+            "AUTH_HEADERS_INVALID::Headers JSON is incomplete or malformed.", str(ctx.exception)
+        )
 
     def test_collector_json_autocompletes_without_eof(self) -> None:
         lines = iter(
@@ -158,7 +164,9 @@ class AuthHeaderNormalizationTests(unittest.TestCase):
         with patch("builtins.input", side_effect=fake_input):
             with self.assertRaises(RuntimeError) as ctx:
                 _collect_auth_headers_from_stdin(ui=None)
-        self.assertIn("AUTH_HEADERS_INVALID::Headers JSON is incomplete or malformed.", str(ctx.exception))
+        self.assertIn(
+            "AUTH_HEADERS_INVALID::Headers JSON is incomplete or malformed.", str(ctx.exception)
+        )
 
     def test_collector_accepts_very_long_cookie_line(self) -> None:
         cookie_value = "x" * 12000

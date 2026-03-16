@@ -135,7 +135,9 @@ class CliJsonOutputTests(unittest.TestCase):
             payload = json.loads(result.stdout.strip())
             self.assertEqual(payload["status"], "ok")
             self.assertEqual(payload["command"], "stats")
-            self.assertEqual(payload["result"]["plan_diagnostics"]["status"], "skipped_missing_plan")
+            self.assertEqual(
+                payload["result"]["plan_diagnostics"]["status"], "skipped_missing_plan"
+            )
             self.assertIn("warnings", payload["result"])
 
     def test_stats_missing_liked_snapshot_returns_ok_with_diagnostics(self) -> None:
@@ -146,7 +148,11 @@ class CliJsonOutputTests(unittest.TestCase):
             plan_path = data_dir / "custom-plan.json"
             plan_path.write_text(
                 json.dumps(
-                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                    {
+                        "playlists": [
+                            {"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}
+                        ]
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -170,7 +176,9 @@ class CliJsonOutputTests(unittest.TestCase):
             payload = json.loads(result.stdout.strip())
             self.assertEqual(payload["status"], "ok")
             self.assertEqual(payload["command"], "stats")
-            self.assertEqual(payload["result"]["plan_diagnostics"]["status"], "skipped_missing_liked")
+            self.assertEqual(
+                payload["result"]["plan_diagnostics"]["status"], "skipped_missing_liked"
+            )
 
     def test_stats_success_returns_diagnostics_and_does_not_rewrite_missing_matches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,7 +205,11 @@ class CliJsonOutputTests(unittest.TestCase):
             plan_path = data_dir / "playlist_plan.json"
             plan_path.write_text(
                 json.dumps(
-                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                    {
+                        "playlists": [
+                            {"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}
+                        ]
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -229,7 +241,9 @@ class CliJsonOutputTests(unittest.TestCase):
             self.assertEqual(payload["result"]["plan_diagnostics"]["loose"], 0)
             self.assertEqual(payload["result"]["plan_diagnostics"]["ambiguous"], 0)
             self.assertTrue(missing_matches.exists())
-            self.assertEqual(json.loads(missing_matches.read_text(encoding="utf-8")), original_missing)
+            self.assertEqual(
+                json.loads(missing_matches.read_text(encoding="utf-8")), original_missing
+            )
 
     def test_demo_rejects_json_flag(self) -> None:
         result = subprocess.run(

@@ -15,9 +15,9 @@ class Config:
 def _to_toml(config: Config) -> str:
     return (
         "# ytmusic-organizer local config\n"
-        f"auth_file = \"{config.auth_file}\"\n"
-        f"classification_mode = \"{config.classification_mode}\"\n"
-        f"openai_model = \"{config.openai_model}\"\n"
+        f'auth_file = "{config.auth_file}"\n'
+        f'classification_mode = "{config.classification_mode}"\n'
+        f'openai_model = "{config.openai_model}"\n'
     )
 
 

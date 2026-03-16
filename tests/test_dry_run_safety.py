@@ -36,7 +36,10 @@ class DryRunSafetyTests(unittest.TestCase):
                     "ytmusic_organizer.workflows._obtain_full_plan",
                     return_value={"playlists": [{"name": "Mix", "songs": []}]},
                 ),
-                patch("ytmusic_organizer.workflows.apply_plan", side_effect=AssertionError("no apply in dry-run")),
+                patch(
+                    "ytmusic_organizer.workflows.apply_plan",
+                    side_effect=AssertionError("no apply in dry-run"),
+                ),
                 patch(
                     "ytmusic_organizer.workflows.update_managed_playlists",
                     side_effect=AssertionError("no managed writes in dry-run"),
@@ -64,7 +67,9 @@ class DryRunSafetyTests(unittest.TestCase):
             data_dir.mkdir(parents=True, exist_ok=True)
             managed = workspace / "managed_playlists.json"
             managed.write_text(
-                json.dumps({"schema_version": 2, "playlists": [{"name": "Managed", "playlist_id": "pl-1"}]}),
+                json.dumps(
+                    {"schema_version": 2, "playlists": [{"name": "Managed", "playlist_id": "pl-1"}]}
+                ),
                 encoding="utf-8",
             )
             state = workspace / "state.json"
@@ -106,7 +111,10 @@ class DryRunSafetyTests(unittest.TestCase):
                     "ytmusic_organizer.workflows.delete_managed_playlists",
                     side_effect=AssertionError("no delete in dry-run"),
                 ),
-                patch("ytmusic_organizer.workflows.apply_plan", side_effect=AssertionError("no apply in dry-run")),
+                patch(
+                    "ytmusic_organizer.workflows.apply_plan",
+                    side_effect=AssertionError("no apply in dry-run"),
+                ),
                 patch(
                     "ytmusic_organizer.workflows.update_managed_playlists",
                     side_effect=AssertionError("no managed writes in dry-run"),
@@ -131,13 +139,17 @@ class DryRunSafetyTests(unittest.TestCase):
             workspace = Path(tmp) / "ws"
             data_dir = workspace / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
-            (workspace / "bootstrap.json").write_text(json.dumps({"completed": True}), encoding="utf-8")
+            (workspace / "bootstrap.json").write_text(
+                json.dumps({"completed": True}), encoding="utf-8"
+            )
             (workspace / "config.toml").write_text(
                 'auth_file = "browser.json"\nclassification_mode = "manual"\nopenai_model = "gpt-4.1-mini"\n',
                 encoding="utf-8",
             )
             (workspace / "browser.json").write_text("{}", encoding="utf-8")
-            (workspace / "state.json").write_text(json.dumps({"processed_video_ids": []}), encoding="utf-8")
+            (workspace / "state.json").write_text(
+                json.dumps({"processed_video_ids": []}), encoding="utf-8"
+            )
 
             with (
                 patch("ytmusic_organizer.workflows.make_ytmusic", return_value=_FakeYTReadOnly()),

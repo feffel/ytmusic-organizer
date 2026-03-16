@@ -111,7 +111,9 @@ def initialize_state(liked_path: Path, state_path: Path) -> None:
     )
 
 
-def update_managed_playlists(items: list[dict[str, Any]], managed_path: Path) -> list[dict[str, str]]:
+def update_managed_playlists(
+    items: list[dict[str, Any]], managed_path: Path
+) -> list[dict[str, str]]:
     playlists: list[dict[str, str]] = []
     seen = set()
 
@@ -255,7 +257,9 @@ def apply_plan(
             existing_video_ids = set()
             action = "created"
         else:
-            results.append({"name": playlist_name, "status": "missing-playlist", "added": 0, "playlist_id": ""})
+            results.append(
+                {"name": playlist_name, "status": "missing-playlist", "added": 0, "playlist_id": ""}
+            )
             continue
 
         to_add: list[str] = []
@@ -293,10 +297,19 @@ def apply_plan(
         if to_add:
             yt.add_playlist_items(playlist_id, to_add)
 
-        results.append({"name": playlist_name, "status": action, "added": len(to_add), "playlist_id": playlist_id})
+        results.append(
+            {
+                "name": playlist_name,
+                "status": action,
+                "added": len(to_add),
+                "playlist_id": playlist_id,
+            }
+        )
 
     missing_path.parent.mkdir(parents=True, exist_ok=True)
-    missing_path.write_text(json.dumps(missing_items, ensure_ascii=False, indent=2), encoding="utf-8")
+    missing_path.write_text(
+        json.dumps(missing_items, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     return {"results": results, "missing": len(missing_items)}
 
@@ -310,7 +323,11 @@ def apply_new_likes(
 ) -> dict[str, Any]:
     new_likes = json.loads(new_likes_path.read_text(encoding="utf-8"))
     plan = json.loads(new_plan_path.read_text(encoding="utf-8"))
-    state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {"processed_video_ids": []}
+    state = (
+        json.loads(state_path.read_text(encoding="utf-8"))
+        if state_path.exists()
+        else {"processed_video_ids": []}
+    )
     processed = set(state.get("processed_video_ids", []))
 
     playlist_map = _build_existing_playlist_map(yt)
@@ -338,12 +355,24 @@ def apply_new_likes(
         for song in playlist.get("songs", []):
             match, _match_type = find_match(song, new_likes)
             if not match:
-                missing.append({"playlist": name, "title": song.get("title", ""), "artist": song.get("artist", "")})
+                missing.append(
+                    {
+                        "playlist": name,
+                        "title": song.get("title", ""),
+                        "artist": song.get("artist", ""),
+                    }
+                )
                 continue
 
             video_id = match.get("videoId")
             if not video_id:
-                missing.append({"playlist": name, "title": song.get("title", ""), "artist": song.get("artist", "")})
+                missing.append(
+                    {
+                        "playlist": name,
+                        "title": song.get("title", ""),
+                        "artist": song.get("artist", ""),
+                    }
+                )
                 continue
 
             matched_video_ids.add(video_id)
@@ -396,7 +425,9 @@ def simulate_apply_plan(
             existing_video_ids = set()
             action = "created"
         else:
-            results.append({"name": playlist_name, "status": "missing-playlist", "added": 0, "playlist_id": ""})
+            results.append(
+                {"name": playlist_name, "status": "missing-playlist", "added": 0, "playlist_id": ""}
+            )
             continue
 
         to_add: list[str] = []
@@ -430,7 +461,14 @@ def simulate_apply_plan(
             seen_ids.add(video_id)
             to_add.append(video_id)
 
-        results.append({"name": playlist_name, "status": action, "added": len(to_add), "playlist_id": playlist_id})
+        results.append(
+            {
+                "name": playlist_name,
+                "status": action,
+                "added": len(to_add),
+                "playlist_id": playlist_id,
+            }
+        )
 
     return {"results": results, "missing": len(missing_items)}
 
@@ -468,12 +506,24 @@ def simulate_apply_new_likes(
         for song in playlist.get("songs", []):
             match, _match_type = find_match(song, new_likes)
             if not match:
-                missing.append({"playlist": name, "title": song.get("title", ""), "artist": song.get("artist", "")})
+                missing.append(
+                    {
+                        "playlist": name,
+                        "title": song.get("title", ""),
+                        "artist": song.get("artist", ""),
+                    }
+                )
                 continue
 
             video_id = match.get("videoId")
             if not video_id:
-                missing.append({"playlist": name, "title": song.get("title", ""), "artist": song.get("artist", "")})
+                missing.append(
+                    {
+                        "playlist": name,
+                        "title": song.get("title", ""),
+                        "artist": song.get("artist", ""),
+                    }
+                )
                 continue
 
             matched_video_ids.add(video_id)

@@ -58,8 +58,12 @@ class StatsTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            (data_dir / "missing_matches.json").write_text(json.dumps([{"song": "x"}]), encoding="utf-8")
-            (data_dir / "new_likes.json").write_text(json.dumps([{"video_id": "n1"}]), encoding="utf-8")
+            (data_dir / "missing_matches.json").write_text(
+                json.dumps([{"song": "x"}]), encoding="utf-8"
+            )
+            (data_dir / "new_likes.json").write_text(
+                json.dumps([{"video_id": "n1"}]), encoding="utf-8"
+            )
             (data_dir / "liked_songs.json").write_text(
                 json.dumps([{"video_id": "a"}, {"video_id": "b"}]),
                 encoding="utf-8",
@@ -93,7 +97,11 @@ class StatsTests(unittest.TestCase):
             )
             (data_dir / "playlist_plan.json").write_text(
                 json.dumps(
-                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                    {
+                        "playlists": [
+                            {"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}
+                        ]
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -113,7 +121,11 @@ class StatsTests(unittest.TestCase):
             custom_plan = data_dir / "custom-plan.json"
             custom_plan.write_text(
                 json.dumps(
-                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                    {
+                        "playlists": [
+                            {"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}
+                        ]
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -153,7 +165,11 @@ class StatsTests(unittest.TestCase):
             (data_dir / "liked_songs.json").write_text("not json", encoding="utf-8")
             (data_dir / "playlist_plan.json").write_text(
                 json.dumps(
-                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                    {
+                        "playlists": [
+                            {"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}
+                        ]
+                    }
                 ),
                 encoding="utf-8",
             )

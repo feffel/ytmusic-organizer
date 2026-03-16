@@ -23,7 +23,7 @@ def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> Non
     found = [path.name for path in legacy if path.exists()]
     if found:
         ui.warning(
-            "Detected legacy local artifacts in current directory ("
+            "Found older local files in this folder ("
             + ", ".join(found)
             + f"). Active workspace is {workspace}."
         )
@@ -38,7 +38,7 @@ def build_helpful_error(exc: Exception) -> str:
             "Auth headers are incomplete or malformed.\n"
             f"{reason}\n\n"
             "How to fix:\n"
-            "1. Re-run setup and paste full request headers.\n"
+            "1. Re-run setup and paste full browser headers.\n"
             "2. For JSON headers, paste through the closing '}'.\n"
             "3. For raw header lines, finish with one blank line.\n"
             "4. Include at least these headers: cookie, x-goog-authuser.\n"
@@ -52,7 +52,7 @@ def build_helpful_error(exc: Exception) -> str:
             "How to fix:\n"
             "1. Run interactive setup (recommended):\n"
             "   ytmo setup\n"
-            "   The wizard creates <workspace>/browser.json for you.\n"
+            "   This creates <workspace>/browser.json for you.\n"
             "2. If you already have a file, pass it explicitly:\n"
             "   ytmo setup --auth-file /absolute/path/to/browser.json\n"
             "3. Auth guide reference:\n"
@@ -60,13 +60,7 @@ def build_helpful_error(exc: Exception) -> str:
         )
 
     if "Setup has not been completed" in text:
-        return (
-            "Setup is incomplete.\n"
-            f"{text}\n\n"
-            "How to fix:\n"
-            "1. Run guided setup:\n"
-            "   ytmo setup"
-        )
+        return f"Setup is incomplete.\n{text}\n\nHow to fix:\n1. Run guided setup:\n   ytmo setup"
 
     if "Setup was interrupted" in text:
         return (
@@ -90,12 +84,12 @@ def build_helpful_error(exc: Exception) -> str:
 
     if "must be an array" in text or ".artist must be a non-empty string" in text:
         return (
-            "Plan JSON is invalid.\n"
+            "Plan output is not valid JSON.\n"
             f"Validation error: {text}\n\n"
             "How to fix:\n"
-            "1. Re-open the generated prompt file in your workspace data directory.\n"
-            "2. Ensure model output exactly matches the expected JSON shape.\n"
-            "3. Save corrected JSON and rerun."
+            "1. Re-open the generated prompt file.\n"
+            "2. Ask the model to return only valid JSON.\n"
+            "3. Paste the corrected JSON and run again."
         )
 
     if "--yes is required when --non-interactive is set for rebuild" in text:
@@ -106,11 +100,41 @@ def build_helpful_error(exc: Exception) -> str:
             "2. Or remove --non-interactive to confirm interactively."
         )
 
+    if "Invalid JSON input:" in text or text.startswith("Invalid JSON"):
+        reason = text.split(":", 1)[1].strip() if ":" in text else text
+        return (
+            "Plan output is not valid JSON.\n"
+            f"{reason}\n\n"
+            "How to fix:\n"
+            "1. Paste only JSON (no extra commentary).\n"
+            "2. Make sure the top-level value is an object.\n"
+            "3. Submit again."
+        )
+
+    if "No JSON received" in text:
+        return (
+            "No plan JSON was provided.\n"
+            "How to fix:\n"
+            "1. Paste your model JSON response.\n"
+            "2. Press Enter to submit."
+        )
+
     return f"Error: {text}"
 
 
 def _base_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ytmo", description=f"YouTube Music Organizer CLI (v{__version__})")
+    parser = argparse.ArgumentParser(
+        prog="ytmo",
+        description=f"YouTube Music Organizer CLI (v{__version__})",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "Most common commands:\n"
+            "  ytmo setup\n"
+            "  ytmo sync\n"
+            "  ytmo rebuild --dry-run\n"
+            "  ytmo stats"
+        ),
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     sub = parser.add_subparsers(dest="command", required=True)
@@ -145,7 +169,9 @@ def _base_parser() -> argparse.ArgumentParser:
     p_setup.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_setup.add_argument("--auth-file", help="Path to browser.json auth file")
     p_setup.add_argument("--non-interactive", action="store_true", help="Disable prompts")
-    p_setup.add_argument("--restart", action="store_true", help="Reset setup progress and start from scratch")
+    p_setup.add_argument(
+        "--restart", action="store_true", help="Reset setup progress and start from scratch"
+    )
 
     p_sync = sub.add_parser("sync", help="Apply incremental liked-song updates")
     add_workspace_argument(p_sync)
@@ -162,21 +188,33 @@ def _base_parser() -> argparse.ArgumentParser:
     p_rebuild.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_rebuild.add_argument("--non-interactive", action="store_true", help="Disable prompts")
 
-    p_cleanup = sub.add_parser("cleanup", help="Delete playlists managed by this tool and local managed artifacts")
+    p_cleanup = sub.add_parser(
+        "cleanup", help="Delete playlists managed by this tool and local managed artifacts"
+    )
     add_workspace_argument(p_cleanup)
     add_json_argument(p_cleanup)
     add_dry_run_argument(p_cleanup)
     p_cleanup.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
-    p_cleanup.add_argument("--local-only", action="store_true", help="Only remove local artifacts, keep remote playlists")
+    p_cleanup.add_argument(
+        "--local-only",
+        action="store_true",
+        help="Only remove local artifacts, keep remote playlists",
+    )
 
-    p_demo = sub.add_parser("demo", help="Live setup walkthrough simulation (no auth/download/write)")
+    p_demo = sub.add_parser(
+        "demo", help="Live setup walkthrough simulation (no auth/download/write)"
+    )
     add_workspace_argument(p_demo)
-    p_demo.add_argument("--mode", choices=["manual", "api"], default="manual", help="Simulated classification mode")
+    p_demo.add_argument(
+        "--mode", choices=["manual", "api"], default="manual", help="Simulated classification mode"
+    )
 
     p_stats = sub.add_parser("stats", help="Show local workspace stats and non-failing diagnostics")
     add_workspace_argument(p_stats)
     add_json_argument(p_stats)
-    p_stats.add_argument("--plan", help="Path to full plan JSON for diagnostics (defaults to workspace plan)")
+    p_stats.add_argument(
+        "--plan", help="Path to full plan JSON for diagnostics (defaults to workspace plan)"
+    )
 
     return parser
 
@@ -190,7 +228,9 @@ def main(argv: list[str] | None = None) -> int:
     json_output = bool(getattr(args, "json_output", False))
     ui = WizardUI()
 
-    def emit_json(status: str, command: str, result: dict | None = None, error: str | None = None) -> None:
+    def emit_json(
+        status: str, command: str, result: dict | None = None, error: str | None = None
+    ) -> None:
         payload: dict[str, object] = {"status": status, "command": command}
         if result is not None:
             payload["result"] = result
@@ -218,10 +258,15 @@ def main(argv: list[str] | None = None) -> int:
                 emit_json("ok", "setup", result=result)
             else:
                 if result.get("dry_run"):
-                    ui.pretty(
-                        f"Dry-run setup: liked={result['liked_count']}, "
-                        f"would_create_playlists={result['would_create_playlists']}, "
-                        f"would_add_items={result['would_add_items']}, missing={result['missing']}"
+                    ui.show_dry_run_summary(
+                        "setup",
+                        {
+                            "liked_tracks": result["liked_count"],
+                            "playlists_in_plan": result["playlists_in_plan"],
+                            "would_create_playlists": result["would_create_playlists"],
+                            "would_add_items": result["would_add_items"],
+                            "missing_matches": result["missing"],
+                        },
                     )
                 else:
                     ui.success(f"Initialized workspace at {result['workspace']}")
@@ -241,11 +286,15 @@ def main(argv: list[str] | None = None) -> int:
             if json_output:
                 emit_json("ok", "sync", result=result)
             elif result.get("dry_run"):
-                ui.pretty(
-                    f"Dry-run sync: new_likes={result['new_likes']}, "
-                    f"would_add_items={result.get('would_add_items', 0)}, "
-                    f"would_mark_processed={result.get('would_mark_processed', 0)}, "
-                    f"missing={result.get('missing', 0)}"
+                ui.show_dry_run_summary(
+                    "sync",
+                    {
+                        "new_likes": result["new_likes"],
+                        "playlists_in_plan": result.get("playlists_in_plan", 0),
+                        "would_add_items": result.get("would_add_items", 0),
+                        "would_mark_processed": result.get("would_mark_processed", 0),
+                        "missing_matches": result.get("missing", 0),
+                    },
                 )
             elif result.get("new_likes", 0) == 0:
                 ui.warning("No new liked songs found.")
@@ -262,7 +311,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.non_interactive and not args.yes and not args.dry_run:
                 raise RuntimeError("--yes is required when --non-interactive is set for rebuild")
             if not args.yes and not args.dry_run:
-                answer = input("This will delete managed playlists and rebuild. Continue? [y/N]: ").strip().lower()
+                answer = (
+                    input("This will delete managed playlists and rebuild. Continue? [y/N]: ")
+                    .strip()
+                    .lower()
+                )
                 if answer not in {"y", "yes"}:
                     if json_output:
                         emit_json("cancelled", "rebuild", result={"message": "Cancelled by user"})
@@ -281,11 +334,16 @@ def main(argv: list[str] | None = None) -> int:
                 emit_json("ok", "rebuild", result=result)
             else:
                 if result.get("dry_run"):
-                    ui.pretty(
-                        f"Dry-run rebuild: liked={result['liked_count']}, "
-                        f"would_delete_playlists={result['would_delete_playlists']}, "
-                        f"would_create_playlists={result['would_create_playlists']}, "
-                        f"would_add_items={result['would_add_items']}, missing={result['missing']}"
+                    ui.show_dry_run_summary(
+                        "rebuild",
+                        {
+                            "liked_tracks": result["liked_count"],
+                            "playlists_in_plan": result["playlists_in_plan"],
+                            "would_delete_playlists": result["would_delete_playlists"],
+                            "would_create_playlists": result["would_create_playlists"],
+                            "would_add_items": result["would_add_items"],
+                            "missing_matches": result["missing"],
+                        },
                     )
                 else:
                     ui.success(
@@ -311,9 +369,13 @@ def main(argv: list[str] | None = None) -> int:
             if not json_output:
                 ui.title("ytmusic-organizer cleanup")
             if not args.yes and not args.dry_run:
-                answer = input(
-                    "This will delete playlists managed by ytmusic-organizer and remove local managed files. Continue? [y/N]: "
-                ).strip().lower()
+                answer = (
+                    input(
+                        "This will delete playlists managed by ytmusic-organizer and remove local managed files. Continue? [y/N]: "
+                    )
+                    .strip()
+                    .lower()
+                )
                 if answer not in {"y", "yes"}:
                     if json_output:
                         emit_json("cancelled", "cleanup", result={"message": "Cancelled by user"})
@@ -321,15 +383,20 @@ def main(argv: list[str] | None = None) -> int:
                         print()
                         ui.warning("Cancelled.")
                     return 1
-            result = run_cleanup(workspace=workspace, local_only=args.local_only, dry_run=args.dry_run)
+            result = run_cleanup(
+                workspace=workspace, local_only=args.local_only, dry_run=args.dry_run
+            )
             if json_output:
                 emit_json("ok", "cleanup", result=result)
             else:
                 if result.get("dry_run"):
-                    ui.pretty(
-                        f"Dry-run cleanup: would_delete_playlists={result['would_delete_playlists']}, "
-                        f"would_remove_local_files={result['would_remove_local_files']}, "
-                        f"local_only={result['local_only']}"
+                    ui.show_dry_run_summary(
+                        "cleanup",
+                        {
+                            "would_delete_playlists": result["would_delete_playlists"],
+                            "would_remove_local_files": result["would_remove_local_files"],
+                            "local_only": result["local_only"],
+                        },
                     )
                 else:
                     ui.success(

@@ -86,7 +86,11 @@ def cleanup_local_artifacts(workspace: Path) -> int:
 
 
 def _load_prompt_file(name: str) -> str:
-    return importlib.resources.files("ytmusic_organizer.prompts").joinpath(name).read_text(encoding="utf-8")
+    return (
+        importlib.resources.files("ytmusic_organizer.prompts")
+        .joinpath(name)
+        .read_text(encoding="utf-8")
+    )
 
 
 def _effective_mode(requested_mode: str | None, config: Config) -> str:
@@ -176,7 +180,9 @@ def _normalize_completed_json_headers(raw_text: str) -> str:
     try:
         json.loads(raw_text)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("AUTH_HEADERS_INVALID::Headers JSON is incomplete or malformed.") from exc
+        raise RuntimeError(
+            "AUTH_HEADERS_INVALID::Headers JSON is incomplete or malformed."
+        ) from exc
     return _normalize_auth_headers(raw_text)
 
 
@@ -270,17 +276,17 @@ def _collect_auth_headers_from_tty() -> str:
 
 def _collect_auth_headers_from_stdin(ui: WizardUI | None = None) -> str:
     if ui:
-        ui.note("Paste request headers and press Enter.")
-        ui.note("JSON input auto-completes when closing '}' is pasted.")
-        ui.note("Raw header lines complete when you enter one blank line.")
-        ui.note('Accepted format 1: cookie: <value>  |  x-goog-authuser: 1')
-        ui.note('Accepted format 2: {"cookie":"<value>","x-goog-authuser":"1",...}')
+        ui.note("Paste browser headers and press Enter.")
+        ui.note("If you paste JSON, it auto-submits when the closing '}' appears.")
+        ui.note("If you paste line-by-line headers, submit with one blank line.")
+        ui.note("Format 1: cookie: <value>  |  x-goog-authuser: 1")
+        ui.note('Format 2: {"cookie":"<value>","x-goog-authuser":"1",...}')
     else:
-        print("Paste request headers and press Enter.")
-        print("JSON input auto-completes when closing '}' is pasted.")
-        print("Raw header lines complete when you enter one blank line.")
-        print("Accepted format 1: cookie: <value>  |  x-goog-authuser: 1")
-        print('Accepted format 2: {"cookie":"<value>","x-goog-authuser":"1",...}')
+        print("Paste browser headers and press Enter.")
+        print("If you paste JSON, it auto-submits when the closing '}' appears.")
+        print("If you paste line-by-line headers, submit with one blank line.")
+        print("Format 1: cookie: <value>  |  x-goog-authuser: 1")
+        print('Format 2: {"cookie":"<value>","x-goog-authuser":"1",...}')
 
     if sys.stdin.isatty():
         return _collect_auth_headers_from_tty()
@@ -321,11 +327,11 @@ def run_demo(
 
     ui = WizardUI(enabled=emit_ui)
     ui.title("ytmusic-organizer demo")
-    ui.warning("DEMO ONLY - no auth, downloads, network calls, or file writes.")
+    ui.warning("Demo mode only: no auth setup, no network calls, and no file changes.")
     pause(0.6)
 
     ui.step("Workspace and config")
-    ui.note(f"Workspace context (simulated): {workspace}")
+    ui.note(f"Workspace (simulated): {workspace}")
     ui.note(f"Classification mode (simulated): {selected_mode}")
     ui.note("Preparing setup inputs (simulated)...")
     pause(0.9)
@@ -335,7 +341,7 @@ def run_demo(
     ui.step("Auth check")
     ui.note("Checking browser auth file (simulated)...")
     pause(0.8)
-    ui.note("Using simulated browser headers: cookie, x-goog-authuser.")
+    ui.note("Using sample browser headers: cookie and x-goog-authuser.")
     pause(0.8)
     ui.success("Auth ready (simulated)")
     pause(0.5)
@@ -363,9 +369,7 @@ def run_demo(
     fake_missing = 3
     ui.note("Resolving matches and playlist diffs (simulated)...")
     pause(1.1)
-    ui.success(
-        f"Playlists created/updated (simulated): added={fake_added}, missing={fake_missing}"
-    )
+    ui.success(f"Playlists created/updated (simulated): added={fake_added}, missing={fake_missing}")
     pause(0.5)
 
     ui.step("Initialize incremental state")
@@ -407,7 +411,7 @@ def run_setup(
         if mode:
             config.classification_mode = mode
         if interactive and not mode:
-            choice = input("Default classification mode [manual/api] (manual): ").strip().lower()
+            choice = input("Default mode [manual/api] (manual): ").strip().lower()
             if choice in {"manual", "api"}:
                 config.classification_mode = choice
 
@@ -417,7 +421,7 @@ def run_setup(
             if explicit_auth_path:
                 raise FileNotFoundError(f"Auth file not found: {auth_path}")
             raise FileNotFoundError(
-                f"Auth file not found: {auth_path}. Dry-run setup requires an existing auth file."
+                f"Auth file not found: {auth_path}. Dry-run setup needs an existing auth file."
             )
 
         yt = make_ytmusic(auth_path)
@@ -464,7 +468,7 @@ def run_setup(
         config.classification_mode = mode
 
     if interactive and not mode:
-        choice = input("Default classification mode [manual/api] (manual): ").strip().lower()
+        choice = input("Default mode [manual/api] (manual): ").strip().lower()
         if choice in {"manual", "api"}:
             config.classification_mode = choice
 
@@ -486,7 +490,7 @@ def run_setup(
                     )
 
                 ui.warning("No auth file found in workspace.")
-                ui.note("Starting interactive auth setup (ytmusicapi).")
+                ui.note("Starting browser auth setup.")
                 ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
                 headers_raw = _collect_auth_headers_from_stdin(ui=ui)
                 ytmusic_setup(filepath=str(auth_path), headers_raw=headers_raw)
@@ -573,32 +577,52 @@ def _obtain_full_plan(
     persist_plan: bool = True,
 ) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_full_reset.txt")
-    songs = songs_override if songs_override is not None else json.loads(paths.liked_songs.read_text(encoding="utf-8"))
+    songs = (
+        songs_override
+        if songs_override is not None
+        else json.loads(paths.liked_songs.read_text(encoding="utf-8"))
+    )
     prompt_text = render_prompt(
         template,
-        {"[PASTE CONTENTS OF liked_songs.json HERE]": json.dumps(songs, ensure_ascii=False, indent=2)},
+        {
+            "[PASTE CONTENTS OF liked_songs.json HERE]": json.dumps(
+                songs, ensure_ascii=False, indent=2
+            )
+        },
     )
     selected_prompt_path = prompt_path or (paths.data_dir / "full_reset_prompt_filled.txt")
     selected_prompt_path.write_text(prompt_text, encoding="utf-8")
-    selected_plan_output = plan_output_path if plan_output_path is not None else (paths.playlist_plan if persist_plan else None)
+    selected_plan_output = (
+        plan_output_path
+        if plan_output_path is not None
+        else (paths.playlist_plan if persist_plan else None)
+    )
 
     if mode == "manual":
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {selected_prompt_path}")
-            ui.note("Paste model JSON into stdin and press Enter.")
-            ui.note("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
+            ui.note("Paste model JSON and press Enter.")
+            ui.note(
+                "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
+            )
         else:
             print("Open prompt file:", selected_prompt_path)
-            print("Paste model JSON into stdin and press Enter.")
-            print("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
+            print("Paste model JSON and press Enter.")
+            print(
+                "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
+            )
         plan = read_json_from_stdin()
         if selected_plan_output:
-            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+            selected_plan_output.write_text(
+                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
-            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+            selected_plan_output.write_text(
+                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
 
     return validate_full_plan(plan)
 
@@ -616,37 +640,55 @@ def _obtain_new_plan(
     persist_plan: bool = True,
 ) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_new_songs.txt")
-    songs = songs_override if songs_override is not None else json.loads(paths.new_likes.read_text(encoding="utf-8"))
+    songs = (
+        songs_override
+        if songs_override is not None
+        else json.loads(paths.new_likes.read_text(encoding="utf-8"))
+    )
     managed = managed_override if managed_override is not None else _load_managed_playlists(paths)
     playlist_lines = "\n".join(f"- {name}" for name in managed) if managed else "- (none)"
     prompt_text = render_prompt(
         template,
         {
             "[EXISTING_PLAYLISTS]": playlist_lines,
-            "[PASTE CONTENTS OF new_likes.json HERE]": json.dumps(songs, ensure_ascii=False, indent=2),
+            "[PASTE CONTENTS OF new_likes.json HERE]": json.dumps(
+                songs, ensure_ascii=False, indent=2
+            ),
         },
     )
     selected_prompt_path = prompt_path or (paths.data_dir / "new_songs_prompt_filled.txt")
     selected_prompt_path.write_text(prompt_text, encoding="utf-8")
-    selected_plan_output = plan_output_path if plan_output_path is not None else (paths.new_plan if persist_plan else None)
+    selected_plan_output = (
+        plan_output_path
+        if plan_output_path is not None
+        else (paths.new_plan if persist_plan else None)
+    )
 
     if mode == "manual":
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {selected_prompt_path}")
-            ui.note("Paste model JSON into stdin and press Enter.")
-            ui.note("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
+            ui.note("Paste model JSON and press Enter.")
+            ui.note(
+                "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
+            )
         else:
             print("Open prompt file:", selected_prompt_path)
-            print("Paste model JSON into stdin and press Enter.")
-            print("JSON auto-submits when closing braces are complete; otherwise submit with one blank line.")
+            print("Paste model JSON and press Enter.")
+            print(
+                "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
+            )
         plan = read_json_from_stdin()
         if selected_plan_output:
-            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+            selected_plan_output.write_text(
+                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
-            selected_plan_output.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+            selected_plan_output.write_text(
+                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
 
     return validate_new_plan(plan)
 
@@ -722,7 +764,9 @@ def run_weekly_sync(
         }
 
     _obtain_new_plan(selected_mode, config, paths, ui=ui, interactive=interactive)
-    result = apply_new_likes(yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches)
+    result = apply_new_likes(
+        yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches
+    )
     result["new_likes"] = len(new_likes)
     return result
 
@@ -812,7 +856,9 @@ def run_cleanup(workspace: Path, local_only: bool = False, dry_run: bool = False
     return _run_cleanup(paths=paths, local_only=local_only, dry_run=dry_run)
 
 
-def _run_cleanup(paths: WorkspacePaths, local_only: bool = False, dry_run: bool = False) -> dict[str, Any]:
+def _run_cleanup(
+    paths: WorkspacePaths, local_only: bool = False, dry_run: bool = False
+) -> dict[str, Any]:
     if dry_run:
         would_remove = count_cleanup_local_artifacts(paths.root)
         preview = {"would_delete": 0, "skipped_legacy": []}
@@ -847,10 +893,16 @@ def _run_cleanup(paths: WorkspacePaths, local_only: bool = False, dry_run: bool 
         skipped_legacy = delete_result.get("skipped_legacy", [])
 
     removed_local = cleanup_local_artifacts(paths.root)
-    return {"deleted_playlists": deleted, "removed_local_files": removed_local, "skipped_legacy": skipped_legacy}
+    return {
+        "deleted_playlists": deleted,
+        "removed_local_files": removed_local,
+        "skipped_legacy": skipped_legacy,
+    }
 
 
-def _read_json_file(path: Path, *, warnings: list[str] | None = None, label: str | None = None) -> Any | None:
+def _read_json_file(
+    path: Path, *, warnings: list[str] | None = None, label: str | None = None
+) -> Any | None:
     if not path.exists():
         return None
     try:
@@ -869,7 +921,9 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
 
     state = _read_json_file(paths.state, warnings=warnings, label="state.json")
     managed = _read_json_file(paths.managed, warnings=warnings, label="managed_playlists.json")
-    missing = _read_json_file(paths.missing_matches, warnings=warnings, label="data/missing_matches.json")
+    missing = _read_json_file(
+        paths.missing_matches, warnings=warnings, label="data/missing_matches.json"
+    )
     new_likes = _read_json_file(paths.new_likes, warnings=warnings, label="data/new_likes.json")
     liked = _read_json_file(paths.liked_songs, warnings=warnings, label="data/liked_songs.json")
 
@@ -879,9 +933,13 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         if isinstance(ids, list):
             processed_ids = ids
         else:
-            warnings.append("state.json has incompatible shape: processed_video_ids must be an array.")
+            warnings.append(
+                "state.json format is invalid. Recreate it with `ytmo setup` or `ytmo rebuild`."
+            )
     elif state is not None:
-        warnings.append("state.json has incompatible shape: root must be an object.")
+        warnings.append(
+            "state.json format is invalid. Recreate it with `ytmo setup` or `ytmo rebuild`."
+        )
 
     playlist_items: list[Any] = []
     if isinstance(managed, dict):
@@ -889,9 +947,13 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         if isinstance(playlists, list):
             playlist_items = playlists
         else:
-            warnings.append("managed_playlists.json has incompatible shape: playlists must be an array.")
+            warnings.append(
+                "managed_playlists.json format is invalid. Recreate it with `ytmo rebuild`."
+            )
     elif managed is not None:
-        warnings.append("managed_playlists.json has incompatible shape: root must be an object.")
+        warnings.append(
+            "managed_playlists.json format is invalid. Recreate it with `ytmo rebuild`."
+        )
 
     if isinstance(missing, list):
         missing_matches = len(missing)
@@ -899,18 +961,18 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         missing_matches = len(missing.get("missing", []))
     else:
         if missing is not None:
-            warnings.append("data/missing_matches.json has incompatible shape: root must be array/object.")
+            warnings.append("data/missing_matches.json format is invalid.")
         missing_matches = 0
 
     if new_likes is not None and not isinstance(new_likes, list):
-        warnings.append("data/new_likes.json has incompatible shape: root must be an array.")
+        warnings.append("data/new_likes.json format is invalid.")
         new_likes = None
 
     if liked is not None and not isinstance(liked, list):
-        warnings.append("data/liked_songs.json has incompatible shape: root must be an array.")
+        warnings.append("data/liked_songs.json format is invalid.")
         liked = None
 
-    selected_plan = (plan_path.resolve() if plan_path else paths.playlist_plan)
+    selected_plan = plan_path.resolve() if plan_path else paths.playlist_plan
     plan_diagnostics: dict[str, Any] = {
         "status": "skipped_missing_plan",
         "plan_path": str(selected_plan),
@@ -928,7 +990,7 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
             )
             if not isinstance(plan_data, dict):
                 if plan_data is not None:
-                    warnings.append(f"Plan file has incompatible shape: {selected_plan} must be a JSON object.")
+                    warnings.append(f"Plan file format is invalid: {selected_plan}.")
                 plan_diagnostics["status"] = "invalid_plan"
             else:
                 try:

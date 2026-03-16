@@ -73,7 +73,9 @@ class FullResetSafetyTests(unittest.TestCase):
             )
             (workspace / "browser.json").write_text("{}", encoding="utf-8")
             (workspace / "managed_playlists.json").write_text(
-                json.dumps({"schema_version": 2, "playlists": [{"name": "Old", "playlist_id": "old-id"}]}),
+                json.dumps(
+                    {"schema_version": 2, "playlists": [{"name": "Old", "playlist_id": "old-id"}]}
+                ),
                 encoding="utf-8",
             )
 
@@ -94,15 +96,22 @@ class FullResetSafetyTests(unittest.TestCase):
 
             def fake_apply_plan(*args, **kwargs):  # noqa: ANN002,ANN003
                 return {
-                    "results": [{"name": "New", "status": "created", "added": 0, "playlist_id": "new-id"}],
+                    "results": [
+                        {"name": "New", "status": "created", "added": 0, "playlist_id": "new-id"}
+                    ],
                     "missing": 0,
                 }
 
             with (
                 patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
                 patch("ytmusic_organizer.workflows.export_liked", return_value=[]),
-                patch("ytmusic_organizer.workflows._obtain_full_plan", side_effect=fake_obtain_full_plan),
-                patch("ytmusic_organizer.workflows.delete_managed_playlists", side_effect=fake_delete),
+                patch(
+                    "ytmusic_organizer.workflows._obtain_full_plan",
+                    side_effect=fake_obtain_full_plan,
+                ),
+                patch(
+                    "ytmusic_organizer.workflows.delete_managed_playlists", side_effect=fake_delete
+                ),
                 patch("ytmusic_organizer.workflows.apply_plan", side_effect=fake_apply_plan),
                 patch("ytmusic_organizer.workflows.initialize_state", return_value=None),
             ):
@@ -112,7 +121,9 @@ class FullResetSafetyTests(unittest.TestCase):
                 observed["managed_at_delete"],
                 {"schema_version": 2, "playlists": [{"name": "Old", "playlist_id": "old-id"}]},
             )
-            final_managed = json.loads((workspace / "managed_playlists.json").read_text(encoding="utf-8"))
+            final_managed = json.loads(
+                (workspace / "managed_playlists.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(
                 final_managed,
                 {"schema_version": 2, "playlists": [{"name": "New", "playlist_id": "new-id"}]},

@@ -39,7 +39,7 @@ class ManualStdinTests(unittest.TestCase):
         with patch("sys.stdin", fake):
             with self.assertRaises(ValueError) as ctx:
                 read_json_from_stdin()
-        self.assertIn("Invalid JSON from stdin", str(ctx.exception))
+        self.assertIn("Invalid JSON input", str(ctx.exception))
 
     def test_read_json_from_stdin_interactive_multiline_json_without_eof(self) -> None:
         fake = _InteractiveStdinNoRead()

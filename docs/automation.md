@@ -61,7 +61,7 @@ Demo note:
 
 ## Manual Mode Input Contract
 
-When running `--mode manual`, the command writes a filled prompt file in workspace `data/` and then waits for JSON on stdin.
+When running `--mode manual`, the command writes a filled prompt file in workspace `data/` and then waits for JSON input.
 
 Example:
 
