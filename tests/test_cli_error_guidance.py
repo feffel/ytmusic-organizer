@@ -20,12 +20,21 @@ class CliErrorGuidanceTests(unittest.TestCase):
         self.assertIn("OPENAI_API_KEY", msg)
         self.assertIn("--mode manual", msg)
 
-    def test_non_interactive_manual_requires_stdin_flag_hint(self) -> None:
+    def test_preview_missing_plan_is_actionable(self) -> None:
         msg = build_helpful_error(
-            RuntimeError("--plan-from-stdin is required for --mode manual when --non-interactive is set")
+            RuntimeError("PREVIEW_MISSING_PLAN::/tmp/ws/data/playlist_plan.json::workspace=/tmp/ws")
         )
-        self.assertIn("stdin", msg)
-        self.assertIn("--plan-from-stdin", msg)
+        self.assertIn("Preview prerequisites are missing", msg)
+        self.assertIn("Plan file not found", msg)
+        self.assertIn("ytmo preview --plan", msg)
+
+    def test_preview_missing_liked_snapshot_is_actionable(self) -> None:
+        msg = build_helpful_error(
+            RuntimeError("PREVIEW_MISSING_LIKED::/tmp/ws/data/liked_songs.json::workspace=/tmp/ws")
+        )
+        self.assertIn("Preview prerequisites are missing", msg)
+        self.assertIn("Liked songs snapshot not found", msg)
+        self.assertIn("ytmo setup", msg)
 
 
 if __name__ == "__main__":

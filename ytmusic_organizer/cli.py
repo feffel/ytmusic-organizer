@@ -5,9 +5,10 @@ import json
 from pathlib import Path
 import sys
 
+from . import __version__
 from .paths import default_workspace
 from .ui import WizardUI
-from .workflows import run_cleanup, run_full_reset, run_preview, run_setup, run_weekly_sync
+from .workflows import run_cleanup, run_full_reset, run_preview, run_setup, run_stats, run_weekly_sync
 
 
 def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> None:
@@ -30,6 +31,38 @@ def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> Non
 
 def build_helpful_error(exc: Exception) -> str:
     text = str(exc)
+
+    if text.startswith("PREVIEW_MISSING_PLAN::"):
+        payload = text.replace("PREVIEW_MISSING_PLAN::", "", 1)
+        plan_path, _, workspace_part = payload.partition("::workspace=")
+        workspace = workspace_part or "<workspace>"
+        return (
+            "Preview prerequisites are missing.\n"
+            f"Plan file not found: {plan_path}\n"
+            f"Workspace: {workspace}\n\n"
+            "How to fix:\n"
+            "1. If this is a fresh workspace, run:\n"
+            "   ytmo setup\n"
+            "2. If you want a full rebuild plan first, run:\n"
+            "   ytmo reset --yes\n"
+            "3. If you already have a plan JSON elsewhere, run:\n"
+            "   ytmo preview --plan /absolute/path/to/plan.json"
+        )
+
+    if text.startswith("PREVIEW_MISSING_LIKED::"):
+        payload = text.replace("PREVIEW_MISSING_LIKED::", "", 1)
+        liked_path, _, workspace_part = payload.partition("::workspace=")
+        workspace = workspace_part or "<workspace>"
+        return (
+            "Preview prerequisites are missing.\n"
+            f"Liked songs snapshot not found: {liked_path}\n"
+            f"Workspace: {workspace}\n\n"
+            "How to fix:\n"
+            "1. Generate liked songs snapshot with setup:\n"
+            "   ytmo setup\n"
+            "2. Or regenerate it during full reset:\n"
+            "   ytmo reset --yes"
+        )
 
     if "Auth file not found:" in text:
         return (
@@ -84,14 +117,6 @@ def build_helpful_error(exc: Exception) -> str:
             "3. Save corrected JSON and rerun."
         )
 
-    if "--plan-from-stdin is required" in text:
-        return (
-            "Manual mode in non-interactive runs requires stdin plan input.\n"
-            f"{text}\n\n"
-            "How to fix:\n"
-            "1. Pipe JSON into the command.\n"
-            "2. Add --plan-from-stdin when using --non-interactive."
-        )
     if "--yes is required when --non-interactive is set for reset" in text:
         return (
             "Non-interactive reset requires explicit destructive confirmation.\n"
@@ -104,7 +129,8 @@ def build_helpful_error(exc: Exception) -> str:
 
 
 def _base_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ytmo", description="YouTube Music Organizer CLI")
+    parser = argparse.ArgumentParser(prog="ytmo", description=f"YouTube Music Organizer CLI (v{__version__})")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -130,11 +156,6 @@ def _base_parser() -> argparse.ArgumentParser:
     p_setup.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_setup.add_argument("--auth-file", help="Path to browser.json auth file")
     p_setup.add_argument("--non-interactive", action="store_true", help="Disable prompts")
-    p_setup.add_argument(
-        "--plan-from-stdin",
-        action="store_true",
-        help="Read manual mode plan JSON from stdin (required with --non-interactive)",
-    )
     p_setup.add_argument("--restart", action="store_true", help="Reset setup progress and start from scratch")
 
     p_sync = sub.add_parser("sync", help="Apply incremental liked-song updates")
@@ -142,11 +163,6 @@ def _base_parser() -> argparse.ArgumentParser:
     add_json_argument(p_sync)
     p_sync.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_sync.add_argument("--non-interactive", action="store_true", help="Disable prompts")
-    p_sync.add_argument(
-        "--plan-from-stdin",
-        action="store_true",
-        help="Read manual mode plan JSON from stdin (required with --non-interactive)",
-    )
 
     p_reset = sub.add_parser("reset", help="Delete managed playlists and rebuild")
     add_workspace_argument(p_reset)
@@ -154,11 +170,6 @@ def _base_parser() -> argparse.ArgumentParser:
     p_reset.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_reset.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_reset.add_argument("--non-interactive", action="store_true", help="Disable prompts")
-    p_reset.add_argument(
-        "--plan-from-stdin",
-        action="store_true",
-        help="Read manual mode plan JSON from stdin (required with --non-interactive)",
-    )
 
     p_cleanup = sub.add_parser("cleanup", help="Delete playlists managed by this tool and local managed artifacts")
     add_workspace_argument(p_cleanup)
@@ -166,10 +177,17 @@ def _base_parser() -> argparse.ArgumentParser:
     p_cleanup.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_cleanup.add_argument("--local-only", action="store_true", help="Only remove local artifacts, keep remote playlists")
 
-    p_preview = sub.add_parser("preview", help="Preview matching diagnostics for a plan")
+    p_preview = sub.add_parser(
+        "preview",
+        help="Preview diagnostics (requires liked_songs.json + full plan; writes missing_matches.json)",
+    )
     add_workspace_argument(p_preview)
     add_json_argument(p_preview)
     p_preview.add_argument("--plan", help="Path to plan JSON (defaults to workspace plan)")
+
+    p_stats = sub.add_parser("stats", help="Show local workspace stats for launch/reporting")
+    add_workspace_argument(p_stats)
+    add_json_argument(p_stats)
 
     return parser
 
@@ -203,7 +221,6 @@ def main(argv: list[str] | None = None) -> int:
                 auth_file=args.auth_file,
                 mode=args.mode,
                 interactive=not args.non_interactive,
-                plan_from_stdin=args.plan_from_stdin,
                 emit_ui=not json_output,
                 restart=args.restart,
             )
@@ -220,7 +237,6 @@ def main(argv: list[str] | None = None) -> int:
             result = run_weekly_sync(
                 workspace=workspace,
                 mode=args.mode,
-                plan_from_stdin=args.plan_from_stdin,
                 interactive=not args.non_interactive,
                 emit_ui=not json_output,
             )
@@ -246,12 +262,12 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "reset", result={"message": "Cancelled by user"})
                     else:
+                        print()
                         ui.warning("Cancelled.")
                     return 1
             result = run_full_reset(
                 workspace=workspace,
                 mode=args.mode,
-                plan_from_stdin=args.plan_from_stdin,
                 interactive=not args.non_interactive,
                 emit_ui=not json_output,
             )
@@ -294,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "cleanup", result={"message": "Cancelled by user"})
                     else:
+                        print()
                         ui.warning("Cancelled.")
                     return 1
             result = run_cleanup(workspace=workspace, local_only=args.local_only)
@@ -309,6 +326,15 @@ def main(argv: list[str] | None = None) -> int:
                         "Skipped legacy managed playlist entries (name-only): "
                         + ", ".join(result["skipped_legacy"])
                     )
+            return 0
+
+        if args.command == "stats":
+            result = run_stats(workspace=workspace)
+            if json_output:
+                emit_json("ok", "stats", result=result)
+            else:
+                ui.title("ytmusic-organizer stats")
+                ui.show_stats(result)
             return 0
 
         parser.error("Unknown command")

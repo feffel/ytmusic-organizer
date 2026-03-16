@@ -105,7 +105,6 @@ def run_setup(
     auth_file: str | None,
     mode: str | None,
     interactive: bool,
-    plan_from_stdin: bool = False,
     emit_ui: bool = True,
     restart: bool = False,
 ) -> dict[str, Any]:
@@ -172,7 +171,7 @@ def run_setup(
 
         if not state.is_step_done("plan_ready") or not paths.playlist_plan.exists():
             ui.step("Generate or wait for playlist plan")
-            _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive, plan_from_stdin=plan_from_stdin)
+            _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive)
             state.mark_step("plan_ready")
             ui.success("Plan ready")
         else:
@@ -227,7 +226,6 @@ def _obtain_full_plan(
     paths: WorkspacePaths,
     ui: WizardUI | None = None,
     interactive: bool = True,
-    plan_from_stdin: bool = False,
 ) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_full_reset.txt")
     songs = json.loads(paths.liked_songs.read_text(encoding="utf-8"))
@@ -239,8 +237,6 @@ def _obtain_full_plan(
     prompt_path.write_text(prompt_text, encoding="utf-8")
 
     if mode == "manual":
-        if not interactive and not plan_from_stdin:
-            raise RuntimeError("--plan-from-stdin is required for --mode manual when --non-interactive is set")
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {prompt_path}")
@@ -263,7 +259,6 @@ def _obtain_new_plan(
     paths: WorkspacePaths,
     ui: WizardUI | None = None,
     interactive: bool = True,
-    plan_from_stdin: bool = False,
 ) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_new_songs.txt")
     songs = json.loads(paths.new_likes.read_text(encoding="utf-8"))
@@ -280,8 +275,6 @@ def _obtain_new_plan(
     prompt_path.write_text(prompt_text, encoding="utf-8")
 
     if mode == "manual":
-        if not interactive and not plan_from_stdin:
-            raise RuntimeError("--plan-from-stdin is required for --mode manual when --non-interactive is set")
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {prompt_path}")
@@ -301,7 +294,6 @@ def _obtain_new_plan(
 def run_weekly_sync(
     workspace: Path,
     mode: str | None = None,
-    plan_from_stdin: bool = False,
     interactive: bool = True,
     emit_ui: bool = True,
 ) -> dict[str, Any]:
@@ -319,7 +311,7 @@ def run_weekly_sync(
         return {"new_likes": 0}
 
     ui = WizardUI(enabled=emit_ui)
-    _obtain_new_plan(mode, config, paths, ui=ui, interactive=interactive, plan_from_stdin=plan_from_stdin)
+    _obtain_new_plan(mode, config, paths, ui=ui, interactive=interactive)
     result = apply_new_likes(yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches)
     result["new_likes"] = len(new_likes)
     return result
@@ -328,7 +320,6 @@ def run_weekly_sync(
 def run_full_reset(
     workspace: Path,
     mode: str | None = None,
-    plan_from_stdin: bool = False,
     interactive: bool = True,
     emit_ui: bool = True,
 ) -> dict[str, Any]:
@@ -342,7 +333,7 @@ def run_full_reset(
 
     liked = export_liked(yt, paths.liked_songs)
     ui = WizardUI(enabled=emit_ui)
-    _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive, plan_from_stdin=plan_from_stdin)
+    _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive)
 
     delete_result = delete_managed_playlists(yt, paths.managed)
     apply_result = apply_plan(
@@ -367,6 +358,14 @@ def run_preview(workspace: Path, plan_path: Path | None = None) -> dict[str, Any
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
     selected_plan = plan_path or paths.playlist_plan
+    if not selected_plan.exists():
+        raise RuntimeError(
+            f"PREVIEW_MISSING_PLAN::{selected_plan}::workspace={paths.root}"
+        )
+    if not paths.liked_songs.exists():
+        raise RuntimeError(
+            f"PREVIEW_MISSING_LIKED::{paths.liked_songs}::workspace={paths.root}"
+        )
     plan_data = json.loads(selected_plan.read_text(encoding="utf-8"))
     validate_full_plan(plan_data)
     return preview_plan(paths.liked_songs, selected_plan, paths.missing_matches)
@@ -390,3 +389,51 @@ def run_cleanup(workspace: Path, local_only: bool = False) -> dict[str, Any]:
 
     removed_local = cleanup_local_artifacts(paths.root)
     return {"deleted_playlists": deleted, "removed_local_files": removed_local, "skipped_legacy": skipped_legacy}
+
+
+def _read_json_file(path: Path) -> Any | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def run_stats(workspace: Path) -> dict[str, Any]:
+    paths = WorkspacePaths(workspace)
+    ensure_workspace_dirs(paths)
+
+    state = _read_json_file(paths.state)
+    managed = _read_json_file(paths.managed)
+    missing = _read_json_file(paths.missing_matches)
+    new_likes = _read_json_file(paths.new_likes)
+    liked = _read_json_file(paths.liked_songs)
+
+    processed_ids = state.get("processed_video_ids", []) if isinstance(state, dict) else []
+    playlist_items = managed.get("playlists", []) if isinstance(managed, dict) else []
+
+    if isinstance(missing, list):
+        missing_matches = len(missing)
+    elif isinstance(missing, dict):
+        missing_matches = len(missing.get("missing", []))
+    else:
+        missing_matches = 0
+
+    artifact_presence = {
+        "config": paths.config.exists(),
+        "state": paths.state.exists(),
+        "managed_playlists": paths.managed.exists(),
+        "liked_songs": paths.liked_songs.exists(),
+        "new_likes": paths.new_likes.exists(),
+        "playlist_plan": paths.playlist_plan.exists(),
+        "new_plan": paths.new_plan.exists(),
+        "missing_matches": paths.missing_matches.exists(),
+    }
+
+    return {
+        "workspace_exists": paths.root.exists(),
+        "processed_likes": len(processed_ids) if isinstance(processed_ids, list) else 0,
+        "managed_playlists": len(playlist_items) if isinstance(playlist_items, list) else 0,
+        "missing_matches": missing_matches,
+        "new_likes_pending": len(new_likes) if isinstance(new_likes, list) else 0,
+        "liked_snapshot_count": len(liked) if isinstance(liked, list) else 0,
+        "artifact_presence": artifact_presence,
+    }
