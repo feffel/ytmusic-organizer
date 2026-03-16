@@ -106,7 +106,7 @@ class FullResetSafetyTests(unittest.TestCase):
                 patch("ytmusic_organizer.workflows.apply_plan", side_effect=fake_apply_plan),
                 patch("ytmusic_organizer.workflows.initialize_state", return_value=None),
             ):
-                run_full_reset(workspace=workspace, mode="manual", plan_from_stdin=True)
+                run_full_reset(workspace=workspace, mode="manual")
 
             self.assertEqual(
                 observed["managed_at_delete"],

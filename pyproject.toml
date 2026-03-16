@@ -10,12 +10,31 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "ytmusic-organizer contributors" }]
+keywords = ["youtube-music", "playlist", "cli", "automation", "music"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Sound/Audio",
+  "Topic :: Utilities",
+]
 dependencies = [
   "requests>=2.32.0",
   "ytmusicapi>=1.11.0",
   "openai>=1.0.0",
   "rich>=13.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/feffel/ytmusic-organizer"
+Repository = "https://github.com/feffel/ytmusic-organizer"
+Issues = "https://github.com/feffel/ytmusic-organizer/issues"
+Changelog = "https://github.com/feffel/ytmusic-organizer/blob/main/CHANGELOG.md"
 
 [project.scripts]
 ytmo = "ytmusic_organizer.cli:main"

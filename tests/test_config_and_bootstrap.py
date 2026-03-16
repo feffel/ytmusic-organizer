@@ -43,7 +43,6 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                     auth_file=None,
                     mode="manual",
                     interactive=False,
-                    plan_from_stdin=True,
                 )
             self.assertEqual(result["workspace"], str(workspace))
 

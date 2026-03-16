@@ -15,3 +15,7 @@ data/*.json
 
 # Local CLI workspace
 .ytmo/
+
+# Generated launch/demo artifacts (never commit binaries/outputs)
+artifacts/demo/
+artifacts/launch/

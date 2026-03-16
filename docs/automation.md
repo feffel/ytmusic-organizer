@@ -31,16 +31,18 @@ All mutable state lives in the workspace (`config.toml`, `state.json`, `managed_
 ## Commands for Automation
 
 - Setup:
-  - `ytmo setup --non-interactive --plan-from-stdin --mode manual --json`
+  - `ytmo setup --non-interactive --mode manual --json`
   - `ytmo setup --non-interactive --mode api --json`
 - Weekly sync:
-  - `ytmo sync --non-interactive --plan-from-stdin --mode manual --json`
+  - `ytmo sync --non-interactive --mode manual --json`
   - `ytmo sync --non-interactive --mode api --json`
 - Full reset (destructive):
-  - `ytmo reset --yes --non-interactive --plan-from-stdin --mode manual --json`
+  - `ytmo reset --yes --non-interactive --mode manual --json`
   - `ytmo reset --yes --non-interactive --mode api --json`
 - Cleanup:
   - `ytmo cleanup --yes --local-only --json`
+- Stats:
+  - `ytmo stats --json`
 
 ## Manual Mode Input Contract
 
@@ -49,7 +51,7 @@ When running `--mode manual`, the command writes a filled prompt file in workspa
 Example:
 
 ```bash
-cat plan.json | ytmo sync --mode manual --non-interactive --plan-from-stdin --json
+cat plan.json | ytmo sync --mode manual --non-interactive --json
 ```
 
 ## JSON Output Contract
@@ -72,6 +74,12 @@ Cancelled shape:
 
 ```json
 {"status":"cancelled","command":"reset","result":{"message":"Cancelled by user"}}
+```
+
+Stats success shape:
+
+```json
+{"status":"ok","command":"stats","result":{"processed_likes":0,"managed_playlists":0,"missing_matches":0}}
 ```
 
 ## Exit Codes
