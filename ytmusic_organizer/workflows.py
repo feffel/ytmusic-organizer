@@ -9,7 +9,7 @@ from ytmusicapi import setup as ytmusic_setup
 
 from .config import Config, load_or_create_config, save_config
 from .paths import WorkspacePaths, ensure_workspace_dirs
-from .planning import classify_with_openai, render_prompt, wait_for_json_file
+from .planning import classify_with_openai, read_json_from_stdin, render_prompt
 from .setup_state import SetupState
 from .ui import WizardUI
 from .validation import validate_full_plan, validate_new_plan
@@ -89,18 +89,27 @@ def _load_managed_playlists(paths: WorkspacePaths) -> list[str]:
         return []
     data = json.loads(paths.managed.read_text(encoding="utf-8"))
     playlists = data.get("playlists", [])
-    return [str(name) for name in playlists if str(name).strip()]
+    if data.get("schema_version") == 2:
+        names = []
+        for item in playlists:
+            if isinstance(item, dict):
+                name = str(item.get("name") or "").strip()
+                if name:
+                    names.append(name)
+        return names
+    return [str(name) for name in playlists if isinstance(name, str) and str(name).strip()]
 
 
 def run_setup(
     workspace: Path,
-    cwd: Path,
     auth_file: str | None,
     mode: str | None,
     interactive: bool,
+    plan_from_stdin: bool = False,
+    emit_ui: bool = True,
     restart: bool = False,
 ) -> dict[str, Any]:
-    ui = WizardUI()
+    ui = WizardUI(enabled=emit_ui)
 
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
@@ -163,23 +172,15 @@ def run_setup(
 
         if not state.is_step_done("plan_ready") or not paths.playlist_plan.exists():
             ui.step("Generate or wait for playlist plan")
-            _obtain_full_plan(mode, config, paths, ui=ui)
+            _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive, plan_from_stdin=plan_from_stdin)
             state.mark_step("plan_ready")
             ui.success("Plan ready")
         else:
             ui.note("Resuming: plan step already completed")
 
-        if not state.is_step_done("managed_updated") or not paths.managed.exists():
-            ui.step("Update managed playlist index")
-            update_managed_playlists(paths.playlist_plan, paths.managed)
-            state.mark_step("managed_updated")
-            ui.success("Managed playlist index updated")
-        else:
-            ui.note("Resuming: managed index already completed")
-
         if not state.is_step_done("playlists_applied"):
             ui.step("Create and fill playlists")
-            apply_plan(
+            apply_result = apply_plan(
                 yt=yt,
                 liked_path=paths.liked_songs,
                 plan_path=paths.playlist_plan,
@@ -189,7 +190,16 @@ def run_setup(
             state.mark_step("playlists_applied")
             ui.success("Playlists created/updated")
         else:
+            apply_result = {"results": []}
             ui.note("Resuming: apply step already completed")
+
+        if not state.is_step_done("managed_updated") or not paths.managed.exists():
+            ui.step("Update managed playlist index")
+            update_managed_playlists(apply_result.get("results", []), paths.managed)
+            state.mark_step("managed_updated")
+            ui.success("Managed playlist index updated")
+        else:
+            ui.note("Resuming: managed index already completed")
 
         if not state.is_step_done("state_initialized") or not paths.state.exists():
             ui.step("Initialize incremental state")
@@ -211,7 +221,14 @@ def run_setup(
         raise
 
 
-def _obtain_full_plan(mode: str, config: Config, paths: WorkspacePaths, ui: WizardUI | None = None) -> dict[str, Any]:
+def _obtain_full_plan(
+    mode: str,
+    config: Config,
+    paths: WorkspacePaths,
+    ui: WizardUI | None = None,
+    interactive: bool = True,
+    plan_from_stdin: bool = False,
+) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_full_reset.txt")
     songs = json.loads(paths.liked_songs.read_text(encoding="utf-8"))
     prompt_text = render_prompt(
@@ -222,14 +239,17 @@ def _obtain_full_plan(mode: str, config: Config, paths: WorkspacePaths, ui: Wiza
     prompt_path.write_text(prompt_text, encoding="utf-8")
 
     if mode == "manual":
+        if not interactive and not plan_from_stdin:
+            raise RuntimeError("--plan-from-stdin is required for --mode manual when --non-interactive is set")
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {prompt_path}")
-            ui.note(f"Save model JSON response to: {paths.playlist_plan}")
+            ui.note("Paste model JSON into stdin and press Ctrl-D when done.")
         else:
             print("Open prompt file:", prompt_path)
-            print("Save model JSON response to:", paths.playlist_plan)
-        plan = wait_for_json_file(paths.playlist_plan)
+            print("Paste model JSON into stdin and press Ctrl-D when done.")
+        plan = read_json_from_stdin()
+        paths.playlist_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         paths.playlist_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -237,7 +257,14 @@ def _obtain_full_plan(mode: str, config: Config, paths: WorkspacePaths, ui: Wiza
     return validate_full_plan(plan)
 
 
-def _obtain_new_plan(mode: str, config: Config, paths: WorkspacePaths, ui: WizardUI | None = None) -> dict[str, Any]:
+def _obtain_new_plan(
+    mode: str,
+    config: Config,
+    paths: WorkspacePaths,
+    ui: WizardUI | None = None,
+    interactive: bool = True,
+    plan_from_stdin: bool = False,
+) -> dict[str, Any]:
     template = _load_prompt_file("gpt_prompt_new_songs.txt")
     songs = json.loads(paths.new_likes.read_text(encoding="utf-8"))
     managed = _load_managed_playlists(paths)
@@ -253,14 +280,17 @@ def _obtain_new_plan(mode: str, config: Config, paths: WorkspacePaths, ui: Wizar
     prompt_path.write_text(prompt_text, encoding="utf-8")
 
     if mode == "manual":
+        if not interactive and not plan_from_stdin:
+            raise RuntimeError("--plan-from-stdin is required for --mode manual when --non-interactive is set")
         if ui:
             ui.step("Manual classification required")
             ui.note(f"Open prompt file: {prompt_path}")
-            ui.note(f"Save model JSON response to: {paths.new_plan}")
+            ui.note("Paste model JSON into stdin and press Ctrl-D when done.")
         else:
             print("Open prompt file:", prompt_path)
-            print("Save model JSON response to:", paths.new_plan)
-        plan = wait_for_json_file(paths.new_plan)
+            print("Paste model JSON into stdin and press Ctrl-D when done.")
+        plan = read_json_from_stdin()
+        paths.new_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         paths.new_plan.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -268,36 +298,13 @@ def _obtain_new_plan(mode: str, config: Config, paths: WorkspacePaths, ui: Wizar
     return validate_new_plan(plan)
 
 
-def run_bootstrap(workspace: Path, cwd: Path, mode: str | None = None) -> dict[str, Any]:
-    paths = WorkspacePaths(workspace)
-    ensure_workspace_dirs(paths)
-    config = load_or_create_config(paths.config)
-    mode = _effective_mode(mode, config)
-
-    auth_path = _resolve_auth_path(config.auth_file, paths.root)
-    if not auth_path.exists():
-        raise FileNotFoundError(f"Auth file not found: {auth_path}")
-
-    yt = make_ytmusic(auth_path)
-
-    liked = export_liked(yt, paths.liked_songs)
-    _obtain_full_plan(mode, config, paths)
-
-    update_managed_playlists(paths.playlist_plan, paths.managed)
-    apply_plan(
-        yt=yt,
-        liked_path=paths.liked_songs,
-        plan_path=paths.playlist_plan,
-        missing_path=paths.missing_matches,
-        create_playlists=True,
-    )
-    initialize_state(paths.liked_songs, paths.state)
-    _set_bootstrap_completed(paths.bootstrap, completed=True)
-
-    return {"liked_count": len(liked), "workspace": str(paths.root)}
-
-
-def run_weekly_sync(workspace: Path, cwd: Path, mode: str | None = None) -> dict[str, Any]:
+def run_weekly_sync(
+    workspace: Path,
+    mode: str | None = None,
+    plan_from_stdin: bool = False,
+    interactive: bool = True,
+    emit_ui: bool = True,
+) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
     ensure_bootstrap_completed(paths.bootstrap)
@@ -311,14 +318,20 @@ def run_weekly_sync(workspace: Path, cwd: Path, mode: str | None = None) -> dict
     if not new_likes:
         return {"new_likes": 0}
 
-    ui = WizardUI()
-    _obtain_new_plan(mode, config, paths, ui=ui)
+    ui = WizardUI(enabled=emit_ui)
+    _obtain_new_plan(mode, config, paths, ui=ui, interactive=interactive, plan_from_stdin=plan_from_stdin)
     result = apply_new_likes(yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches)
     result["new_likes"] = len(new_likes)
     return result
 
 
-def run_full_reset(workspace: Path, cwd: Path, mode: str | None = None) -> dict[str, Any]:
+def run_full_reset(
+    workspace: Path,
+    mode: str | None = None,
+    plan_from_stdin: bool = False,
+    interactive: bool = True,
+    emit_ui: bool = True,
+) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
 
@@ -328,22 +341,26 @@ def run_full_reset(workspace: Path, cwd: Path, mode: str | None = None) -> dict[
     yt = make_ytmusic(auth_path)
 
     liked = export_liked(yt, paths.liked_songs)
-    ui = WizardUI()
-    _obtain_full_plan(mode, config, paths, ui=ui)
+    ui = WizardUI(enabled=emit_ui)
+    _obtain_full_plan(mode, config, paths, ui=ui, interactive=interactive, plan_from_stdin=plan_from_stdin)
 
-    update_managed_playlists(paths.playlist_plan, paths.managed)
-    deleted = delete_managed_playlists(yt, paths.managed)
-    apply_plan(
+    delete_result = delete_managed_playlists(yt, paths.managed)
+    apply_result = apply_plan(
         yt=yt,
         liked_path=paths.liked_songs,
         plan_path=paths.playlist_plan,
         missing_path=paths.missing_matches,
         create_playlists=True,
     )
+    update_managed_playlists(apply_result.get("results", []), paths.managed)
     initialize_state(paths.liked_songs, paths.state)
     _set_bootstrap_completed(paths.bootstrap, completed=True)
 
-    return {"liked_count": len(liked), "deleted_playlists": deleted}
+    return {
+        "liked_count": len(liked),
+        "deleted_playlists": delete_result.get("deleted", 0),
+        "skipped_legacy": delete_result.get("skipped_legacy", []),
+    }
 
 
 def run_preview(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
@@ -355,18 +372,21 @@ def run_preview(workspace: Path, plan_path: Path | None = None) -> dict[str, Any
     return preview_plan(paths.liked_songs, selected_plan, paths.missing_matches)
 
 
-def run_cleanup(workspace: Path, cwd: Path, local_only: bool = False) -> dict[str, Any]:
+def run_cleanup(workspace: Path, local_only: bool = False) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
 
     deleted = 0
+    skipped_legacy: list[str] = []
     if not local_only:
         config = load_or_create_config(paths.config)
         auth_path = _resolve_auth_path(config.auth_file, paths.root)
         if not auth_path.exists():
             raise FileNotFoundError(f"Auth file not found: {auth_path}")
         yt = make_ytmusic(auth_path)
-        deleted = delete_managed_playlists(yt, paths.managed)
+        delete_result = delete_managed_playlists(yt, paths.managed)
+        deleted = delete_result.get("deleted", 0)
+        skipped_legacy = delete_result.get("skipped_legacy", [])
 
     removed_local = cleanup_local_artifacts(paths.root)
-    return {"deleted_playlists": deleted, "removed_local_files": removed_local}
+    return {"deleted_playlists": deleted, "removed_local_files": removed_local, "skipped_legacy": skipped_legacy}

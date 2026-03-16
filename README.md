@@ -55,24 +55,26 @@ ytmo reset --yes
 
 ## Commands
 
-- `ytmo setup [--mode manual|api] [--auth-file PATH] [--restart]`
-- `ytmo sync [--mode manual|api]`
-- `ytmo reset [--yes] [--mode manual|api]`
+- `ytmo setup [--mode manual|api] [--auth-file PATH] [--non-interactive] [--plan-from-stdin] [--restart]`
+- `ytmo sync [--mode manual|api] [--non-interactive] [--plan-from-stdin]`
+- `ytmo reset [--yes] [--mode manual|api] [--non-interactive] [--plan-from-stdin]`
 - `ytmo cleanup [--yes] [--local-only]`
 - `ytmo preview [--plan PATH]`
 
 Common option:
 
 - `--workspace` (default `~/.ytmusic-organizer`)
+- `--json` (machine-readable output; keeps default Rich output unchanged when omitted)
 
 ## Modes
 
 ### Manual mode (default)
 
-The CLI exports song JSON and waits for your model response JSON file:
+The CLI exports song JSON and waits for your model response JSON on stdin:
 
-- full flows read/write `~/.ytmusic-organizer/data/playlist_plan.json` by default
-- weekly sync reads/writes `~/.ytmusic-organizer/data/new_plan.json` by default
+- full flows write prompt to `~/.ytmusic-organizer/data/full_reset_prompt_filled.txt`
+- weekly sync writes prompt to `~/.ytmusic-organizer/data/new_songs_prompt_filled.txt`
+- provide model JSON by piping/pasting into stdin (Ctrl-D to submit)
 - default workspace path is `~/.ytmusic-organizer` (override with `--workspace`)
 
 Prompt templates are packaged in `ytmusic_organizer/prompts/`.
@@ -105,6 +107,8 @@ Run with `--mode api` to auto-generate plan JSON.
 
 These are intentionally ignored from git.
 
+`managed_playlists.json` now stores managed playlist IDs (schema v2) for safe deletion targeting.
+
 ## Troubleshooting
 
 - `Auth file not found`:
@@ -136,6 +140,12 @@ Run tests:
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+## Agent Automation
+
+For AI/automation integration details (install, auth requirements, command contracts, and JSON output examples), see:
+
+- [docs/automation.md](docs/automation.md)
 
 ## Release Automation
 

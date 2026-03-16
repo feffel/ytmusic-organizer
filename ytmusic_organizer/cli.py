@@ -1,12 +1,31 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
 from .paths import default_workspace
 from .ui import WizardUI
 from .workflows import run_cleanup, run_full_reset, run_preview, run_setup, run_weekly_sync
+
+
+def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> None:
+    if workspace == cwd:
+        return
+    legacy = [
+        cwd / "browser.json",
+        cwd / "state.json",
+        cwd / "managed_playlists.json",
+        cwd / "data",
+    ]
+    found = [path.name for path in legacy if path.exists()]
+    if found:
+        ui.warning(
+            "Detected legacy local artifacts in current directory ("
+            + ", ".join(found)
+            + f"). Active workspace is {workspace}."
+        )
 
 
 def build_helpful_error(exc: Exception) -> str:
@@ -65,6 +84,22 @@ def build_helpful_error(exc: Exception) -> str:
             "3. Save corrected JSON and rerun."
         )
 
+    if "--plan-from-stdin is required" in text:
+        return (
+            "Manual mode in non-interactive runs requires stdin plan input.\n"
+            f"{text}\n\n"
+            "How to fix:\n"
+            "1. Pipe JSON into the command.\n"
+            "2. Add --plan-from-stdin when using --non-interactive."
+        )
+    if "--yes is required when --non-interactive is set for reset" in text:
+        return (
+            "Non-interactive reset requires explicit destructive confirmation.\n"
+            "How to fix:\n"
+            "1. Re-run reset with --yes.\n"
+            "2. Or remove --non-interactive to confirm interactively."
+        )
+
     return f"Error: {text}"
 
 
@@ -81,29 +116,59 @@ def _base_parser() -> argparse.ArgumentParser:
             help=f"Workspace directory (default: {default_path})",
         )
 
+    def add_json_argument(command_parser: argparse.ArgumentParser) -> None:
+        command_parser.add_argument(
+            "--json",
+            action="store_true",
+            dest="json_output",
+            help="Print machine-readable JSON output",
+        )
+
     p_setup = sub.add_parser("setup", help="Guided first-time setup and initial playlist build")
     add_workspace_argument(p_setup)
+    add_json_argument(p_setup)
     p_setup.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_setup.add_argument("--auth-file", help="Path to browser.json auth file")
     p_setup.add_argument("--non-interactive", action="store_true", help="Disable prompts")
+    p_setup.add_argument(
+        "--plan-from-stdin",
+        action="store_true",
+        help="Read manual mode plan JSON from stdin (required with --non-interactive)",
+    )
     p_setup.add_argument("--restart", action="store_true", help="Reset setup progress and start from scratch")
 
     p_sync = sub.add_parser("sync", help="Apply incremental liked-song updates")
     add_workspace_argument(p_sync)
+    add_json_argument(p_sync)
     p_sync.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
+    p_sync.add_argument("--non-interactive", action="store_true", help="Disable prompts")
+    p_sync.add_argument(
+        "--plan-from-stdin",
+        action="store_true",
+        help="Read manual mode plan JSON from stdin (required with --non-interactive)",
+    )
 
     p_reset = sub.add_parser("reset", help="Delete managed playlists and rebuild")
     add_workspace_argument(p_reset)
+    add_json_argument(p_reset)
     p_reset.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_reset.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
+    p_reset.add_argument("--non-interactive", action="store_true", help="Disable prompts")
+    p_reset.add_argument(
+        "--plan-from-stdin",
+        action="store_true",
+        help="Read manual mode plan JSON from stdin (required with --non-interactive)",
+    )
 
     p_cleanup = sub.add_parser("cleanup", help="Delete playlists managed by this tool and local managed artifacts")
     add_workspace_argument(p_cleanup)
+    add_json_argument(p_cleanup)
     p_cleanup.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_cleanup.add_argument("--local-only", action="store_true", help="Only remove local artifacts, keep remote playlists")
 
     p_preview = sub.add_parser("preview", help="Preview matching diagnostics for a plan")
     add_workspace_argument(p_preview)
+    add_json_argument(p_preview)
     p_preview.add_argument("--plan", help="Path to plan JSON (defaults to workspace plan)")
 
     return parser
@@ -115,27 +180,53 @@ def main(argv: list[str] | None = None) -> int:
 
     workspace = Path(args.workspace).resolve()
     cwd = Path.cwd().resolve()
+    json_output = bool(getattr(args, "json_output", False))
     ui = WizardUI()
+
+    def emit_json(status: str, command: str, result: dict | None = None, error: str | None = None) -> None:
+        payload: dict[str, object] = {"status": status, "command": command}
+        if result is not None:
+            payload["result"] = result
+        if error is not None:
+            payload["error"] = error
+        print(json.dumps(payload, ensure_ascii=False))
+
+    if not json_output:
+        _warn_legacy_root_artifacts(ui, workspace=workspace, cwd=cwd)
 
     try:
         if args.command == "setup":
-            ui.title("ytmusic-organizer setup")
+            if not json_output:
+                ui.title("ytmusic-organizer setup")
             result = run_setup(
                 workspace=workspace,
-                cwd=cwd,
                 auth_file=args.auth_file,
                 mode=args.mode,
                 interactive=not args.non_interactive,
+                plan_from_stdin=args.plan_from_stdin,
+                emit_ui=not json_output,
                 restart=args.restart,
             )
-            ui.success(f"Initialized workspace at {result['workspace']}")
-            ui.success("Initial playlist build completed.")
+            if json_output:
+                emit_json("ok", "setup", result=result)
+            else:
+                ui.success(f"Initialized workspace at {result['workspace']}")
+                ui.success("Initial playlist build completed.")
             return 0
 
         if args.command == "sync":
-            ui.title("ytmusic-organizer sync")
-            result = run_weekly_sync(workspace=workspace, cwd=cwd, mode=args.mode)
-            if result.get("new_likes", 0) == 0:
+            if not json_output:
+                ui.title("ytmusic-organizer sync")
+            result = run_weekly_sync(
+                workspace=workspace,
+                mode=args.mode,
+                plan_from_stdin=args.plan_from_stdin,
+                interactive=not args.non_interactive,
+                emit_ui=not json_output,
+            )
+            if json_output:
+                emit_json("ok", "sync", result=result)
+            elif result.get("new_likes", 0) == 0:
                 ui.warning("No new liked songs found.")
             else:
                 ui.success(
@@ -145,49 +236,88 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "reset":
-            ui.title("ytmusic-organizer reset")
+            if not json_output:
+                ui.title("ytmusic-organizer reset")
+            if args.non_interactive and not args.yes:
+                raise RuntimeError("--yes is required when --non-interactive is set for reset")
             if not args.yes:
                 answer = input("This will delete managed playlists and rebuild. Continue? [y/N]: ").strip().lower()
                 if answer not in {"y", "yes"}:
-                    ui.warning("Cancelled.")
+                    if json_output:
+                        emit_json("cancelled", "reset", result={"message": "Cancelled by user"})
+                    else:
+                        ui.warning("Cancelled.")
                     return 1
-            result = run_full_reset(workspace=workspace, cwd=cwd, mode=args.mode)
-            ui.success(
-                f"Full reset completed. Liked songs: {result['liked_count']}, "
-                f"deleted playlists: {result['deleted_playlists']}"
+            result = run_full_reset(
+                workspace=workspace,
+                mode=args.mode,
+                plan_from_stdin=args.plan_from_stdin,
+                interactive=not args.non_interactive,
+                emit_ui=not json_output,
             )
+            if json_output:
+                emit_json("ok", "reset", result=result)
+            else:
+                ui.success(
+                    f"Full reset completed. Liked songs: {result['liked_count']}, "
+                    f"deleted playlists: {result['deleted_playlists']}"
+                )
+                if result.get("skipped_legacy"):
+                    ui.warning(
+                        "Skipped legacy managed playlist entries (name-only): "
+                        + ", ".join(result["skipped_legacy"])
+                    )
             return 0
 
         if args.command == "preview":
-            ui.title("ytmusic-organizer preview")
+            if not json_output:
+                ui.title("ytmusic-organizer preview")
             plan_path = Path(args.plan).resolve() if args.plan else None
             result = run_preview(workspace=workspace, plan_path=plan_path)
-            ui.pretty(
-                f"Matched: {result['matched']}, missing: {result['missing']}, "
-                f"loose: {result['loose']}, ambiguous: {result['ambiguous']}"
-            )
+            if json_output:
+                emit_json("ok", "preview", result=result)
+            else:
+                ui.pretty(
+                    f"Matched: {result['matched']}, missing: {result['missing']}, "
+                    f"loose: {result['loose']}, ambiguous: {result['ambiguous']}"
+                )
             return 0
 
         if args.command == "cleanup":
-            ui.title("ytmusic-organizer cleanup")
+            if not json_output:
+                ui.title("ytmusic-organizer cleanup")
             if not args.yes:
                 answer = input(
                     "This will delete playlists managed by ytmusic-organizer and remove local managed files. Continue? [y/N]: "
                 ).strip().lower()
                 if answer not in {"y", "yes"}:
-                    ui.warning("Cancelled.")
+                    if json_output:
+                        emit_json("cancelled", "cleanup", result={"message": "Cancelled by user"})
+                    else:
+                        ui.warning("Cancelled.")
                     return 1
-            result = run_cleanup(workspace=workspace, cwd=cwd, local_only=args.local_only)
-            ui.success(
-                f"Cleanup completed. Deleted playlists: {result['deleted_playlists']}, "
-                f"removed local files: {result['removed_local_files']}"
-            )
+            result = run_cleanup(workspace=workspace, local_only=args.local_only)
+            if json_output:
+                emit_json("ok", "cleanup", result=result)
+            else:
+                ui.success(
+                    f"Cleanup completed. Deleted playlists: {result['deleted_playlists']}, "
+                    f"removed local files: {result['removed_local_files']}"
+                )
+                if result.get("skipped_legacy"):
+                    ui.warning(
+                        "Skipped legacy managed playlist entries (name-only): "
+                        + ", ".join(result["skipped_legacy"])
+                    )
             return 0
 
         parser.error("Unknown command")
         return 2
     except Exception as exc:
-        print(build_helpful_error(exc), file=sys.stderr)
+        if json_output:
+            emit_json("error", args.command, error=build_helpful_error(exc))
+        else:
+            print(build_helpful_error(exc), file=sys.stderr)
         return 1
 
 

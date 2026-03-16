@@ -20,6 +20,13 @@ class CliErrorGuidanceTests(unittest.TestCase):
         self.assertIn("OPENAI_API_KEY", msg)
         self.assertIn("--mode manual", msg)
 
+    def test_non_interactive_manual_requires_stdin_flag_hint(self) -> None:
+        msg = build_helpful_error(
+            RuntimeError("--plan-from-stdin is required for --mode manual when --non-interactive is set")
+        )
+        self.assertIn("stdin", msg)
+        self.assertIn("--plan-from-stdin", msg)
+
 
 if __name__ == "__main__":
     unittest.main()

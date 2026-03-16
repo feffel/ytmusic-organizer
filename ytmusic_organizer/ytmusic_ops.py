@@ -11,6 +11,10 @@ from ytmusicapi import YTMusic
 from .matching import find_match, normalize
 
 
+def _managed_entry(name: str, playlist_id: str) -> dict[str, str]:
+    return {"name": name, "playlist_id": playlist_id}
+
+
 def build_playlist_description(playlist: dict[str, Any]) -> str:
     managed_tag = "Managed by ytmusic-organizer"
     explicit = str(playlist.get("description", "")).strip()
@@ -92,43 +96,63 @@ def initialize_state(liked_path: Path, state_path: Path) -> None:
     )
 
 
-def update_managed_playlists(plan_path: Path, managed_path: Path) -> list[str]:
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    names = []
+def update_managed_playlists(items: list[dict[str, Any]], managed_path: Path) -> list[dict[str, str]]:
+    playlists: list[dict[str, str]] = []
     seen = set()
 
-    for p in plan.get("playlists", []):
-        name = (p.get("name") or "").strip()
-        if not name:
+    for item in items:
+        name = str(item.get("name") or "").strip()
+        playlist_id = str(item.get("playlist_id") or "").strip()
+        if not name or not playlist_id:
             continue
-        key = name.lower()
+        key = playlist_id
         if key in seen:
             continue
         seen.add(key)
-        names.append(name)
+        playlists.append(_managed_entry(name, playlist_id))
 
     managed_path.write_text(
-        json.dumps({"playlists": names}, ensure_ascii=False, indent=2),
+        json.dumps({"schema_version": 2, "playlists": playlists}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    return names
+    return playlists
 
 
-def delete_managed_playlists(yt: YTMusic, managed_path: Path) -> int:
-    managed = json.loads(managed_path.read_text(encoding="utf-8")) if managed_path.exists() else {"playlists": []}
-    managed_names = {normalize(name) for name in managed.get("playlists", [])}
+def delete_managed_playlists(yt: YTMusic, managed_path: Path) -> dict[str, Any]:
+    if not managed_path.exists():
+        return {"deleted": 0, "skipped_legacy": []}
 
+    managed = json.loads(managed_path.read_text(encoding="utf-8"))
+    playlists = managed.get("playlists", [])
+    if not isinstance(playlists, list):
+        playlists = []
+
+    managed_ids: set[str] = set()
+    skipped_legacy: list[str] = []
+    if managed.get("schema_version") == 2:
+        for item in playlists:
+            if not isinstance(item, dict):
+                continue
+            playlist_id = str(item.get("playlist_id") or "").strip()
+            if playlist_id:
+                managed_ids.add(playlist_id)
+    else:
+        for item in playlists:
+            if isinstance(item, str) and item.strip():
+                skipped_legacy.append(item.strip())
+
+    library_ids = {
+        str(playlist.get("playlistId") or "").strip()
+        for playlist in yt.get_library_playlists(limit=500)
+        if str(playlist.get("playlistId") or "").strip()
+    }
     deleted = 0
-    for playlist in yt.get_library_playlists(limit=500):
-        title = (playlist.get("title") or "").strip()
-        playlist_id = playlist.get("playlistId")
-        if not title or not playlist_id:
-            continue
-        if normalize(title) in managed_names:
+    for playlist_id in managed_ids:
+        if playlist_id in library_ids:
             yt.delete_playlist(playlist_id)
             deleted += 1
 
-    return deleted
+    return {"deleted": deleted, "skipped_legacy": skipped_legacy}
 
 
 def _build_existing_playlist_map(yt: YTMusic) -> dict[str, dict[str, str]]:
@@ -191,7 +215,7 @@ def apply_plan(
             existing_video_ids = set()
             action = "created"
         else:
-            results.append({"name": playlist_name, "status": "missing-playlist", "added": 0})
+            results.append({"name": playlist_name, "status": "missing-playlist", "added": 0, "playlist_id": ""})
             continue
 
         to_add: list[str] = []
@@ -229,7 +253,7 @@ def apply_plan(
         if to_add:
             yt.add_playlist_items(playlist_id, to_add)
 
-        results.append({"name": playlist_name, "status": action, "added": len(to_add)})
+        results.append({"name": playlist_name, "status": action, "added": len(to_add), "playlist_id": playlist_id})
 
     missing_path.parent.mkdir(parents=True, exist_ok=True)
     missing_path.write_text(json.dumps(missing_items, ensure_ascii=False, indent=2), encoding="utf-8")

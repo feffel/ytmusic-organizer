@@ -40,10 +40,10 @@ class ConfigAndBootstrapTests(unittest.TestCase):
             ):
                 result = run_setup(
                     workspace=workspace,
-                    cwd=root / "another-cwd",
                     auth_file=None,
                     mode="manual",
                     interactive=False,
+                    plan_from_stdin=True,
                 )
             self.assertEqual(result["workspace"], str(workspace))
 
@@ -55,7 +55,6 @@ class ConfigAndBootstrapTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError) as ctx:
                 run_setup(
                     workspace=workspace,
-                    cwd=root,
                     auth_file=None,
                     mode="manual",
                     interactive=False,

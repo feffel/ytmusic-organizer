@@ -6,6 +6,7 @@ It supports:
 - incremental weekly sync (`ytmo sync`)
 - destructive rebuild (`ytmo reset`)
 - cleanup (`ytmo cleanup`)
+- optional machine-readable command responses (`--json`)
 
 Runtime state is workspace-centric: mutable files live under a workspace directory (default `~/.ytmusic-organizer/`).
 
@@ -17,7 +18,7 @@ Flow:
 1. Load workspace config and auth.
 2. Export only new likes via `export_new_likes(...)` by diffing current likes against `state.json` (`processed_video_ids`).
 3. Classification step:
-- Manual mode: writes `data/new_songs_prompt_filled.txt`, waits for `data/new_plan.json`.
+- Manual mode: writes `data/new_songs_prompt_filled.txt`, then reads plan JSON from stdin and saves `data/new_plan.json`.
 - API mode: calls OpenAI and writes `data/new_plan.json`.
 4. Apply mapped songs to existing managed playlists via `apply_new_likes(...)`.
 5. Update `state.json` with matched new video IDs.
@@ -33,11 +34,11 @@ Primary entrypoint: `ytmo reset --yes`.
 Flow:
 1. Export full likes via `export_liked(...)` into `data/liked_songs.json`.
 2. Classification step:
-- Manual mode: writes `data/full_reset_prompt_filled.txt`, waits for `data/playlist_plan.json`.
+- Manual mode: writes `data/full_reset_prompt_filled.txt`, then reads plan JSON from stdin and saves `data/playlist_plan.json`.
 - API mode: calls OpenAI and writes `data/playlist_plan.json`.
-3. Update `managed_playlists.json` from plan playlist names.
-4. Delete only managed playlists via `delete_managed_playlists(...)`.
-5. Recreate/populate playlists via `apply_plan(...)`.
+3. Delete previously managed playlists via `delete_managed_playlists(...)` (ID-based targeting).
+4. Recreate/populate playlists via `apply_plan(...)`.
+5. Persist fresh managed playlist index from applied playlist IDs.
 6. Reinitialize `state.json` from all current liked song IDs via `initialize_state(...)`.
 7. Mark bootstrap complete in `bootstrap.json`.
 
@@ -59,7 +60,8 @@ Used to detect incremental new likes.
 
 - `managed_playlists.json`
 Type: generated persistent index.
-Source of truth for which playlists this tool is allowed to delete/manage.
+Schema v2: `{ "schema_version": 2, "playlists": [{ "name": "...", "playlist_id": "..." }] }`.
+Source of truth for which playlists this tool is allowed to delete/manage (by ID).
 
 - `data/playlist_plan.json`
 Type: generated or user-supplied plan artifact.
@@ -118,7 +120,7 @@ Writes: `state.json`.
 
 - `ytmusic_organizer/ytmusic_ops.py::delete_managed_playlists`
 Reads: `managed_playlists.json`, current library playlists.
-Writes: remote playlist deletions.
+Writes: remote playlist deletions by playlist ID only; legacy name-only entries are skipped conservatively.
 
 - `ytmusic_organizer/ytmusic_ops.py::update_managed_playlists`
 Reads: `data/playlist_plan.json`.
@@ -129,6 +131,7 @@ Orchestration for setup/sync/reset/preview/cleanup.
 
 - `ytmusic_organizer/cli.py`
 Command parsing and user-facing flow control.
+Supports optional JSON output mode (`--json`) for automation.
 
 - `ytmusic_organizer/matching.py`
 Title/artist normalization and matching heuristics.
@@ -137,7 +140,7 @@ Title/artist normalization and matching heuristics.
 Strict schema checks for plan JSON.
 
 - `ytmusic_organizer/planning.py`
-Prompt rendering, manual wait loop, OpenAI API classification.
+Prompt rendering, manual stdin JSON intake, OpenAI API classification.
 
 # Shell Workflows
 No dedicated shell wrapper scripts are used.
@@ -158,6 +161,9 @@ Current `Makefile` targets are:
 Makefile execution detail:
 - All targets run through `.venv/bin/python` and require `.venv` to exist.
 - `check-venv` guard fails fast with setup instructions if `.venv` is missing.
+
+Automation docs:
+- `docs/automation.md` is the integration contract for agents/scripts (non-interactive flags, stdin manual mode, JSON output shape).
 
 # Data Flow
 ## `data/liked_songs.json`
@@ -186,7 +192,7 @@ Makefile execution detail:
 - Rewritten each apply/preview run with current unresolved mapping items.
 
 # Safety Rules
-- Only delete playlists whose normalized names are listed in `managed_playlists.json`.
+- Only delete playlists whose IDs are listed in `managed_playlists.json` schema v2.
 - Never delete arbitrary playlists outside managed index.
 - Do not overwrite or expose `browser.json`.
 - `state.json` should only grow during incremental sync; full reset intentionally reinitializes it.
@@ -199,6 +205,7 @@ Makefile execution detail:
 - Correctness depends on YTMusic API response structure and metadata quality.
 - `apply_new_likes` updates `state.json` with matched IDs only (unmatched IDs remain unprocessed and can reappear in later syncs).
 - Running commands with different `--workspace` values creates separate state trees; operators must stay consistent.
+- Legacy managed playlist files without schema v2 are not auto-deleted for safety.
 
 # Improvement Ideas
 - Add Make aliases `weekly-sync` and `full-reset` (or document naming migration in CLI help output).

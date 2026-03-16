@@ -1,4 +1,4 @@
-# Copy to .ytmo/config.toml or use `ytmo init` to generate one.
+# Copy to ~/.ytmusic-organizer/config.toml or run `ytmo setup` to generate one.
 auth_file = "browser.json"
 classification_mode = "manual"
 openai_model = "gpt-4.1-mini"
