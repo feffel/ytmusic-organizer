@@ -1,8 +1,8 @@
 # ytmusic-organizer
 
-[![PyPI version](https://img.shields.io/pypi/v/ytmusic-organizer)](https://pypi.org/project/ytmusic-organizer/)
-[![Python versions](https://img.shields.io/pypi/pyversions/ytmusic-organizer)](https://pypi.org/project/ytmusic-organizer/)
-[![License](https://img.shields.io/pypi/l/ytmusic-organizer)](https://github.com/feffel/ytmusic-organizer/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/ytmusic-organizer?label=PyPI&color=0A7BBB)](https://pypi.org/project/ytmusic-organizer/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://pypi.org/project/ytmusic-organizer/)
+[![License](https://img.shields.io/pypi/l/ytmusic-organizer?color=6aa84f)](https://github.com/feffel/ytmusic-organizer/blob/main/LICENSE)
 [![CI](https://github.com/feffel/ytmusic-organizer/actions/workflows/ci.yml/badge.svg)](https://github.com/feffel/ytmusic-organizer/actions/workflows/ci.yml)
 [![PyPI Publish](https://github.com/feffel/ytmusic-organizer/actions/workflows/release-pypi.yml/badge.svg)](https://github.com/feffel/ytmusic-organizer/actions/workflows/release-pypi.yml)
 
@@ -10,24 +10,23 @@ Organize your YouTube Music likes into practical playlists with a guided first-t
 
 ```text
             ██╗   ██╗████████╗███╗   ███╗ ██████╗
-             ╚██╗ ██╔╝╚══██╔══╝████╗ ████║██╔═══██╗
-              ╚████╔╝    ██║   ██╔████╔██║██║   ██║
-               ╚██╔╝     ██║   ██║╚██╔╝██║██║   ██║
-                ██║      ██║   ██║ ╚═╝ ██║╚██████╔╝
-                ╚═╝      ╚═╝   ╚═╝     ╚═╝ ╚═════╝
+            ╚██╗ ██╔╝╚══██╔══╝████╗ ████║██╔═══██╗
+             ╚████╔╝    ██║   ██╔████╔██║██║   ██║
+              ╚██╔╝     ██║   ██║╚██╔╝██║██║   ██║
+               ██║      ██║   ██║ ╚═╝ ██║╚██████╔╝
+               ╚═╝      ╚═╝   ╚═╝     ╚═╝ ╚═════╝
 
-           Y T M O  •  Playlist Automation, Human Taste.
+            Y T M O  •  Playlist Automation, Human Taste.
 ```
 
 ## Features
 
-- Build a complete playlist system from your full liked songs library.
-- Keep playlists up to date by syncing only newly liked tracks.
-- Rebuild managed playlists safely when you want a fresh structure.
-- Track managed playlists by ID to avoid deleting unrelated playlists.
-- Run in manual mode (bring your own model output) or API mode (`OPENAI_API_KEY`).
-- Resume interrupted setup without restarting from scratch.
-- Automate runs with non-interactive flags and machine-readable `--json` output.
+- Turn a large liked-songs library into usable playlists fast.
+- Keep playlists continuously fresh as your taste changes week to week.
+- Save hours of manual sorting and repetitive playlist maintenance.
+- Rebuild your playlist structure anytime.
+- Keep full control over classification with either manual or API-driven workflows.
+- Run reliably in terminal or automation with the same command surface.
 
 ## Install
 
