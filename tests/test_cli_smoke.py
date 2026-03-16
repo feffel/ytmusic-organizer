@@ -61,7 +61,7 @@ class CliSmokeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 2, msg=result.stderr)
             self.assertIn("Auth file is missing", result.stderr)
 
-    def test_rebuild_cancelled_warning_renders_on_new_line(self) -> None:
+    def test_rebuild_cancelled_uses_callout_style(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             result = subprocess.run(
@@ -79,7 +79,7 @@ class CliSmokeTests(unittest.TestCase):
                 input="n\n",
             )
             self.assertEqual(result.returncode, 1)
-            self.assertIn("\nWARN Cancelled.", result.stdout)
+            self.assertIn("Action cancelled", result.stdout)
 
     def test_reset_command_is_removed(self) -> None:
         result = subprocess.run(
@@ -114,7 +114,7 @@ class CliSmokeTests(unittest.TestCase):
             self.assertNotIn("--yes is required", result.stderr)
             self.assertIn("Auth file is missing", result.stderr)
 
-    def test_cleanup_cancelled_warning_renders_on_new_line(self) -> None:
+    def test_cleanup_cancelled_uses_callout_style(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             result = subprocess.run(
@@ -132,7 +132,7 @@ class CliSmokeTests(unittest.TestCase):
                 input="n\n",
             )
             self.assertEqual(result.returncode, 1)
-            self.assertIn("\nWARN Cancelled.", result.stdout)
+            self.assertIn("Action cancelled", result.stdout)
 
     def test_demo_runs_with_default_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -152,6 +152,7 @@ class CliSmokeTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("Demo mode only", result.stdout)
+            self.assertIn("Step 1/5", result.stdout)
             self.assertFalse(workspace.exists())
 
     def test_demo_runs_for_manual_and_api_modes(self) -> None:
@@ -174,7 +175,7 @@ class CliSmokeTests(unittest.TestCase):
                     text=True,
                 )
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
-                self.assertIn(f"Classification mode (simulated): {mode}", result.stdout)
+                self.assertIn(f"Mode: {mode}", result.stdout)
 
     def test_demo_invalid_mode_returns_parse_error(self) -> None:
         result = subprocess.run(
@@ -185,6 +186,29 @@ class CliSmokeTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2)
         self.assertIn("invalid choice", result.stderr)
+
+    def test_stats_plain_output_uses_hero_secondary_footer_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "stats",
+                    "--workspace",
+                    str(workspace),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Identity Hero", result.stdout)
+            self.assertIn("Shape + Momentum", result.stdout)
+            self.assertIn("Highlights", result.stdout)
+            self.assertIn("Health Footer", result.stdout)
+            self.assertIn("Health:", result.stdout)
 
 
 if __name__ == "__main__":

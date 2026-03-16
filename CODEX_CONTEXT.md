@@ -49,6 +49,20 @@ Implementation location:
 - Orchestration: `ytmusic_organizer/workflows.py` (`run_full_reset`)
 - Core ops: `ytmusic_organizer/ytmusic_ops.py`
 
+## Workspace Stats
+Primary entrypoint: `ytmo stats`.
+
+Flow:
+1. Read local workspace artifacts (`state.json`, managed index, likes snapshots, plans, missing matches).
+2. Run non-failing diagnostics for malformed/missing artifacts.
+3. Optionally validate/diagnose plan quality against `data/liked_songs.json`.
+4. Derive share-oriented local insights (`identity_score`, `top_playlists`, `coverage_ratio`, collection/momentum labels).
+5. Render human output via a TTY-first single-canvas dashboard (`Identity Hero`, `Shape + Momentum`, `Highlights`, `Health Footer`) or plain grouped text when not in TTY.
+
+Implementation location:
+- Orchestration and insight derivation: `ytmusic_organizer/workflows.py` (`run_stats`)
+- Presentation and animation primitives: `ytmusic_organizer/ui.py` (`WizardUI.show_stats`)
+
 # Key Files
 Note: below paths are workspace-relative (default `~/.ytmusic-organizer/`) unless explicitly noted.
 
@@ -136,11 +150,14 @@ Reads: `data/playlist_plan.json`.
 Writes: `managed_playlists.json`.
 
 - `ytmusic_organizer/workflows.py`
-Orchestration for setup/sync/rebuild/cleanup/stats, dry-run simulation paths, and terminal-only demo simulation.
+Orchestration for setup/sync/rebuild/cleanup/stats, dry-run simulation paths, terminal-only demo simulation, and stats insight derivation.
 
 - `ytmusic_organizer/cli.py`
 Command parsing and user-facing flow control.
-Supports optional JSON output mode (`--json`) for automation.
+Supports optional JSON output mode (`--json`) for automation and command recaps/callouts for human output.
+
+- `ytmusic_organizer/ui.py`
+TTY-first flow renderer. Provides guided stepper surfaces for command workflows, modern recap/callout cards, dry-run preview cards, and a single-canvas staged stats renderer for interactive terminals. Rich/TTY output also applies dedicated path accent styling for filesystem paths across step/detail/callout/recap surfaces.
 
 - `ytmusic_organizer/matching.py`
 Title/artist normalization and matching heuristics.
@@ -223,13 +240,23 @@ CI automation:
 ## `data/missing_matches.json`
 - Rewritten each apply run with current unresolved mapping items.
 
+## `run_stats` derived insights
+- `run_stats` now computes local-only derived insight fields: `identity_score`, `plan_playlists`, `top_playlists`, `coverage_ratio`, `collection_shape`, and `pending_momentum`.
+- These are included in command results and power human stats rendering; JSON output remains backward-compatible.
+
 # Safety Rules
 - Only delete playlists whose IDs are listed in `managed_playlists.json` schema v2.
 - Never delete arbitrary playlists outside managed index.
 - Do not overwrite or expose `browser.json`.
 - Interactive auth setup captures paste in non-canonical TTY mode (to avoid long-line truncation), and both TTY/non-TTY now share one header-collection state machine: auto-detect JSON-vs-raw input, complete on closing `}` (JSON) or blank line (raw), and validate required keys (`cookie`, `x-goog-authuser`) before writing auth.
 - Interactive manual plan input no longer depends on EOF signals; it accepts line-based paste, auto-submits once JSON parses, and allows blank-line submit for raw/fenced retries.
-- Human-facing CLI output uses a YouTube Music-inspired Rich theme and dry-run summary cards; `--json` output remains machine-stable.
+- Manual classification callouts now explicitly instruct users to run the generated prompt in their AI tool and paste back the full output JSON.
+- Human-facing CLI output uses a TTY-first renderer with guided stepper progress for setup/sync/rebuild/demo, recap cards for command completion, and callout-style confirmations.
+- Resumable setup now replays previously completed setup steps as numbered `Step n/6 done ...` entries so resumed runs keep accurate step index progression instead of muted `Resuming:` notes.
+- Interactive resumed setup no longer re-prompts for default classification mode when no `--mode` override is passed; it reuses persisted `classification_mode`.
+- Interactive TTY stats output is share-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (hero), 0.18s (shape/momentum), 0.18s (highlights), 0.12s (footer), then frame lock.
+- Non-TTY output stays deterministic plain text with the same information hierarchy.
+- `--json` output remains machine-stable.
 - `state.json` should only grow during incremental sync; full rebuild intentionally reinitializes it.
 - `ytmo rebuild` and `ytmo cleanup` are destructive by design and require explicit confirmation unless `--yes` is passed.
 - `ytmo setup` is non-destructive for existing remote playlists (create/populate only).
@@ -237,7 +264,7 @@ CI automation:
 - Manual-mode dry-run writes prompt text only to temporary files outside workspace and auto-deletes them.
 - `ytmo demo` is always simulation-only: no auth setup, no YTMusic/OpenAI calls, no playlist mutations, and no workspace writes.
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
-- `ytmo stats` human output maps internal plan status codes to friendly labels (for example, `Needs plan file`).
+- `ytmo stats` human output maps internal plan status codes to friendly labels and keeps diagnostics compact in `Health Footer` (health + status + optional single diagnostics line when issues exist).
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
 

@@ -1,3 +1,5 @@
+import contextlib
+import io
 import tempfile
 from pathlib import Path
 import unittest
@@ -8,6 +10,41 @@ from ytmusic_organizer.workflows import ensure_bootstrap_completed, run_setup
 
 
 class ConfigAndBootstrapTests(unittest.TestCase):
+    @contextlib.contextmanager
+    def _setup_mocks(self):
+        def fake_export_liked(_yt, liked_path: Path):  # noqa: ANN001
+            liked_path.parent.mkdir(parents=True, exist_ok=True)
+            liked_path.write_text("[]", encoding="utf-8")
+            return []
+
+        def fake_obtain_full_plan(_mode, _config, paths, **_kwargs):  # noqa: ANN001
+            paths.playlist_plan.parent.mkdir(parents=True, exist_ok=True)
+            paths.playlist_plan.write_text('{"playlists": []}', encoding="utf-8")
+            return {"playlists": []}
+
+        def fake_update_managed_playlists(_results, managed_path: Path):  # noqa: ANN001
+            managed_path.write_text('{"schema_version": 2, "playlists": []}', encoding="utf-8")
+            return []
+
+        def fake_initialize_state(_liked_path: Path, state_path: Path):  # noqa: ANN001
+            state_path.write_text('{"processed_video_ids": []}', encoding="utf-8")
+
+        with (
+            patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
+            patch("ytmusic_organizer.workflows.export_liked", side_effect=fake_export_liked),
+            patch("ytmusic_organizer.workflows._obtain_full_plan", side_effect=fake_obtain_full_plan),
+            patch(
+                "ytmusic_organizer.workflows.update_managed_playlists",
+                side_effect=fake_update_managed_playlists,
+            ),
+            patch(
+                "ytmusic_organizer.workflows.apply_plan",
+                return_value={"results": [], "missing": 0},
+            ),
+            patch("ytmusic_organizer.workflows.initialize_state", side_effect=fake_initialize_state),
+        ):
+            yield
+
     def test_config_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
@@ -151,6 +188,59 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                 "AUTH_HEADERS_INVALID::Missing required header(s): x-goog-authuser",
                 str(ctx.exception),
             )
+
+    def test_setup_resume_replays_completed_steps_with_numbered_done_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "browser.json").write_text("{}", encoding="utf-8")
+
+            with self._setup_mocks():
+                run_setup(
+                    workspace=workspace,
+                    auth_file=None,
+                    mode="manual",
+                    interactive=False,
+                )
+
+            capture = io.StringIO()
+            with patch("sys.stdout", capture):
+                with self._setup_mocks():
+                    run_setup(
+                        workspace=workspace,
+                        auth_file=None,
+                        mode="manual",
+                        interactive=False,
+                    )
+
+            output = capture.getvalue()
+            self.assertIn("Step 1/6 done | Auth check already completed", output)
+            self.assertIn("Step 2/6 done | Export full liked songs already completed", output)
+            self.assertIn("Step 6/6 done | Initialize incremental state already completed", output)
+            self.assertNotIn("Resuming:", output)
+
+    def test_setup_resume_reuses_saved_mode_without_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "browser.json").write_text("{}", encoding="utf-8")
+
+            with self._setup_mocks():
+                run_setup(
+                    workspace=workspace,
+                    auth_file=None,
+                    mode="manual",
+                    interactive=False,
+                )
+
+            with patch("builtins.input", side_effect=AssertionError("input() should not be called")):
+                with self._setup_mocks():
+                    run_setup(
+                        workspace=workspace,
+                        auth_file=None,
+                        mode=None,
+                        interactive=True,
+                    )
 
 
 if __name__ == "__main__":

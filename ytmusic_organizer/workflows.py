@@ -326,58 +326,69 @@ def run_demo(
             time.sleep(seconds)
 
     ui = WizardUI(enabled=emit_ui)
-    ui.title("ytmusic-organizer demo")
-    ui.warning("Demo mode only: no auth setup, no network calls, and no file changes.")
+    ui.start_flow(
+        title="ytmusic-organizer demo",
+        steps=[
+            "Workspace and config",
+            "Auth check",
+            "Export full liked songs",
+            "Generate playlist plan",
+            "Create playlists and initialize state",
+        ],
+    )
+    ui.render_callout(
+        "warning",
+        "Demo mode only",
+        ["No auth setup, no network calls, and no file changes."],
+    )
     pause(0.6)
 
-    ui.step("Workspace and config")
-    ui.note(f"Workspace (simulated): {workspace}")
-    ui.note(f"Classification mode (simulated): {selected_mode}")
-    ui.note("Preparing setup inputs (simulated)...")
+    ui.start_step("Workspace and config")
+    ui.step_detail(f"Workspace: {workspace}")
+    ui.step_detail(f"Mode: {selected_mode}")
+    ui.step_detail("Preparing setup inputs (simulated)...")
     pause(0.9)
-    ui.success("Workspace ready (simulated)")
+    ui.finish_step("Workspace ready (simulated)")
     pause(0.5)
 
-    ui.step("Auth check")
-    ui.note("Checking browser auth file (simulated)...")
+    ui.start_step("Auth check")
+    ui.step_detail("Checking browser auth file (simulated)...")
     pause(0.8)
-    ui.note("Using sample browser headers: cookie and x-goog-authuser.")
+    ui.step_detail("Using sample browser headers: cookie and x-goog-authuser.")
     pause(0.8)
-    ui.success("Auth ready (simulated)")
+    ui.finish_step("Auth ready (simulated)")
     pause(0.5)
 
     fake_liked_count = 48
-    ui.step("Export full liked songs")
-    ui.note("Fetching liked songs from YouTube Music (simulated)...")
+    ui.start_step("Export full liked songs")
+    ui.step_detail("Fetching liked songs from YouTube Music (simulated)...")
     pause(1.0)
-    ui.success(f"Exported {fake_liked_count} liked songs (simulated)")
+    ui.finish_step(f"Exported {fake_liked_count} liked songs (simulated)")
     pause(0.5)
 
-    ui.step("Generate playlist plan")
+    ui.start_step("Generate playlist plan")
     if selected_mode == "manual":
-        ui.note("Manual mode simulation: prompt opened and JSON pasted.")
+        ui.step_detail("Manual mode simulation: prompt opened and JSON pasted.")
         pause(0.9)
     else:
-        ui.note("API mode simulation: model returned validated plan JSON.")
+        ui.step_detail("API mode simulation: model returned validated plan JSON.")
         pause(0.9)
     fake_playlists = 7
-    ui.success(f"Plan ready with {fake_playlists} playlists (simulated)")
+    ui.finish_step(f"Plan ready with {fake_playlists} playlists (simulated)")
     pause(0.5)
 
-    ui.step("Create and fill playlists")
+    ui.start_step("Create playlists and initialize state")
     fake_added = 42
     fake_missing = 3
-    ui.note("Resolving matches and playlist diffs (simulated)...")
+    ui.step_detail("Resolving matches and playlist diffs (simulated)...")
     pause(1.1)
-    ui.success(f"Playlists created/updated (simulated): added={fake_added}, missing={fake_missing}")
-    pause(0.5)
-
-    ui.step("Initialize incremental state")
-    ui.note("Saving processed IDs (simulated)...")
+    ui.step_detail("Saving processed IDs (simulated)...")
     pause(0.8)
-    ui.success("State initialized (simulated)")
+    ui.finish_step(
+        f"Playlists created/updated (simulated): added={fake_added}, missing={fake_missing}"
+    )
     pause(0.6)
-    ui.success("Demo completed (simulated)")
+    ui.finish_flow("Demo completed (simulated)")
 
     return {
         "simulated": True,
@@ -400,6 +411,16 @@ def run_setup(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     ui = WizardUI(enabled=emit_ui)
+    ui.start_flow(
+        steps=[
+            "Auth check",
+            "Export full liked songs",
+            "Generate playlist plan",
+            "Create and fill playlists",
+            "Update managed playlist index",
+            "Initialize incremental state",
+        ]
+    )
     paths = WorkspacePaths(workspace)
 
     if dry_run:
@@ -460,6 +481,15 @@ def run_setup(
     if restart:
         state.reset()
         ui.warning("Setup state was reset. Starting from scratch.")
+    tracked_setup_steps = (
+        "auth_ready",
+        "liked_exported",
+        "plan_ready",
+        "playlists_applied",
+        "managed_updated",
+        "state_initialized",
+    )
+    has_resume_progress = any(state.is_step_done(step) for step in tracked_setup_steps)
 
     config = load_or_create_config(paths.config)
     if auth_file:
@@ -467,7 +497,7 @@ def run_setup(
     if mode:
         config.classification_mode = mode
 
-    if interactive and not mode:
+    if interactive and not mode and not has_resume_progress:
         choice = input("Default mode [manual/api] (manual): ").strip().lower()
         if choice in {"manual", "api"}:
             config.classification_mode = choice
@@ -477,7 +507,7 @@ def run_setup(
 
     try:
         auth_path = _resolve_auth_path(config.auth_file, paths.root)
-        if not state.is_step_done("auth_ready"):
+        if not state.is_step_done("auth_ready") or not auth_path.exists():
             ui.step("Auth check")
             if not auth_path.exists():
                 explicit_auth_path = auth_file is not None
@@ -500,7 +530,7 @@ def run_setup(
             state.mark_step("auth_ready")
             ui.success("Auth ready")
         else:
-            ui.note("Resuming: auth step already completed")
+            ui.replay_completed_step("Auth check already completed")
 
         yt = make_ytmusic(auth_path)
         selected_mode = _effective_mode(mode, config)
@@ -512,7 +542,7 @@ def run_setup(
             ui.success(f"Exported {len(liked)} liked songs")
         else:
             liked = json.loads(paths.liked_songs.read_text(encoding="utf-8"))
-            ui.note("Resuming: liked songs export already completed")
+            ui.replay_completed_step("Export full liked songs already completed")
 
         if not state.is_step_done("plan_ready") or not paths.playlist_plan.exists():
             ui.step("Generate or wait for playlist plan")
@@ -520,7 +550,7 @@ def run_setup(
             state.mark_step("plan_ready")
             ui.success("Plan ready")
         else:
-            ui.note("Resuming: plan step already completed")
+            ui.replay_completed_step("Generate or wait for playlist plan already completed")
 
         if not state.is_step_done("playlists_applied"):
             ui.step("Create and fill playlists")
@@ -535,7 +565,7 @@ def run_setup(
             ui.success("Playlists created/updated")
         else:
             apply_result = {"results": []}
-            ui.note("Resuming: apply step already completed")
+            ui.replay_completed_step("Create and fill playlists already completed")
 
         if not state.is_step_done("managed_updated") or not paths.managed.exists():
             ui.step("Update managed playlist index")
@@ -543,7 +573,7 @@ def run_setup(
             state.mark_step("managed_updated")
             ui.success("Managed playlist index updated")
         else:
-            ui.note("Resuming: managed index already completed")
+            ui.replay_completed_step("Update managed playlist index already completed")
 
         if not state.is_step_done("state_initialized") or not paths.state.exists():
             ui.step("Initialize incremental state")
@@ -551,7 +581,7 @@ def run_setup(
             state.mark_step("state_initialized")
             ui.success("State initialized")
         else:
-            ui.note("Resuming: state already initialized")
+            ui.replay_completed_step("Initialize incremental state already completed")
 
         _set_bootstrap_completed(paths.bootstrap, completed=True)
         state.complete()
@@ -600,15 +630,20 @@ def _obtain_full_plan(
 
     if mode == "manual":
         if ui:
-            ui.step("Manual classification required")
-            ui.note(f"Open prompt file: {selected_prompt_path}")
-            ui.note("Paste model JSON and press Enter.")
-            ui.note(
-                "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
+            ui.render_callout(
+                "info",
+                "Manual classification required",
+                [
+                    f"Open prompt file: {selected_prompt_path}",
+                    "Use this prompt with your AI tool.",
+                    "Paste back the full output JSON and press Enter.",
+                    "JSON auto-submits when closing braces are complete; otherwise submit with one blank line.",
+                ],
             )
         else:
             print("Open prompt file:", selected_prompt_path)
-            print("Paste model JSON and press Enter.")
+            print("Use this prompt with your AI tool.")
+            print("Paste back the full output JSON and press Enter.")
             print(
                 "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
             )
@@ -666,15 +701,20 @@ def _obtain_new_plan(
 
     if mode == "manual":
         if ui:
-            ui.step("Manual classification required")
-            ui.note(f"Open prompt file: {selected_prompt_path}")
-            ui.note("Paste model JSON and press Enter.")
-            ui.note(
-                "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
+            ui.render_callout(
+                "info",
+                "Manual classification required",
+                [
+                    f"Open prompt file: {selected_prompt_path}",
+                    "Use this prompt with your AI tool.",
+                    "Paste back the full output JSON and press Enter.",
+                    "JSON auto-submits when closing braces are complete; otherwise submit with one blank line.",
+                ],
             )
         else:
             print("Open prompt file:", selected_prompt_path)
-            print("Paste model JSON and press Enter.")
+            print("Use this prompt with your AI tool.")
+            print("Paste back the full output JSON and press Enter.")
             print(
                 "JSON auto-submits when closing braces are complete; otherwise submit with one blank line."
             )
@@ -701,6 +741,14 @@ def run_weekly_sync(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
+    ui = WizardUI(enabled=emit_ui)
+    ui.start_flow(
+        steps=[
+            "Export new likes",
+            "Generate or wait for new-likes plan",
+            "Apply playlist updates",
+        ]
+    )
     if not dry_run:
         ensure_workspace_dirs(paths)
     ensure_bootstrap_completed(paths.bootstrap)
@@ -712,6 +760,7 @@ def run_weekly_sync(
         raise FileNotFoundError(f"Auth file not found: {auth_path}")
     yt = make_ytmusic(auth_path)
 
+    ui.start_step("Export new likes")
     if dry_run:
         state_data = (
             json.loads(paths.state.read_text(encoding="utf-8"))
@@ -722,13 +771,15 @@ def run_weekly_sync(
         new_likes = export_new_likes_data(yt, processed_ids)
     else:
         new_likes = export_new_likes(yt, paths.state, paths.new_likes)
+    ui.finish_step(f"Detected {len(new_likes)} new likes")
 
     if not new_likes:
+        ui.finish_flow("Sync completed: no new likes")
         if dry_run:
             return {"dry_run": True, "new_likes": 0}
         return {"new_likes": 0}
 
-    ui = WizardUI(enabled=emit_ui)
+    ui.start_step("Generate or wait for new-likes plan")
     if dry_run:
         temp_prompt = _create_temp_prompt_path("ytmo-new-plan-")
         managed = _load_managed_playlists(paths)
@@ -747,6 +798,8 @@ def run_weekly_sync(
         finally:
             if temp_prompt.exists():
                 temp_prompt.unlink()
+        ui.finish_step("Plan ready")
+        ui.start_step("Apply playlist updates")
         preview = simulate_apply_new_likes(
             yt,
             new_likes,
@@ -754,6 +807,11 @@ def run_weekly_sync(
             current_state=state_data,
         )
         results = preview.get("results", [])
+        ui.finish_step(
+            "Previewed playlist updates: "
+            f"would_add={sum(int(item.get('added', 0)) for item in results)}"
+        )
+        ui.finish_flow("Sync dry-run completed")
         return {
             "dry_run": True,
             "new_likes": len(new_likes),
@@ -764,10 +822,16 @@ def run_weekly_sync(
         }
 
     _obtain_new_plan(selected_mode, config, paths, ui=ui, interactive=interactive)
+    ui.finish_step("Plan ready")
+    ui.start_step("Apply playlist updates")
     result = apply_new_likes(
         yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches
     )
     result["new_likes"] = len(new_likes)
+    ui.finish_step(
+        f"Updated playlists with {result.get('new_likes', 0)} new likes; missing={result.get('missing', 0)}"
+    )
+    ui.finish_flow("Sync completed")
     return result
 
 
@@ -779,6 +843,16 @@ def run_full_reset(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
+    ui = WizardUI(enabled=emit_ui)
+    ui.start_flow(
+        steps=[
+            "Export full liked songs",
+            "Generate or wait for playlist plan",
+            "Delete managed playlists",
+            "Create and fill playlists",
+            "Finalize managed state",
+        ]
+    )
     if not dry_run:
         ensure_workspace_dirs(paths)
 
@@ -789,8 +863,10 @@ def run_full_reset(
         raise FileNotFoundError(f"Auth file not found: {auth_path}")
     yt = make_ytmusic(auth_path)
 
+    ui.start_step("Export full liked songs")
     liked = export_liked_data(yt) if dry_run else export_liked(yt, paths.liked_songs)
-    ui = WizardUI(enabled=emit_ui)
+    ui.finish_step(f"Exported {len(liked)} liked songs")
+    ui.start_step("Generate or wait for playlist plan")
     if dry_run:
         temp_prompt = _create_temp_prompt_path("ytmo-full-plan-")
         try:
@@ -807,8 +883,14 @@ def run_full_reset(
         finally:
             if temp_prompt.exists():
                 temp_prompt.unlink()
+        ui.finish_step("Plan ready")
 
+        ui.start_step("Delete managed playlists")
         delete_result = simulate_delete_managed_playlists(yt, paths.managed)
+        ui.finish_step(
+            f"Would delete {int(delete_result.get('would_delete', 0))} managed playlists"
+        )
+        ui.start_step("Create and fill playlists")
         apply_result = simulate_apply_plan(
             yt=yt,
             liked_tracks=liked,
@@ -816,6 +898,12 @@ def run_full_reset(
             create_playlists=True,
         )
         results = apply_result.get("results", [])
+        ui.finish_step(
+            f"Would create {sum(1 for item in results if item.get('status') == 'created')} playlists"
+        )
+        ui.start_step("Finalize managed state")
+        ui.finish_step("Dry-run does not mutate managed state")
+        ui.finish_flow("Rebuild dry-run completed")
         return {
             "dry_run": True,
             "liked_count": len(liked),
@@ -829,8 +917,12 @@ def run_full_reset(
         }
 
     _obtain_full_plan(selected_mode, config, paths, ui=ui, interactive=interactive)
+    ui.finish_step("Plan ready")
 
+    ui.start_step("Delete managed playlists")
     delete_result = delete_managed_playlists(yt, paths.managed)
+    ui.finish_step(f"Deleted {delete_result.get('deleted', 0)} managed playlists")
+    ui.start_step("Create and fill playlists")
     apply_result = apply_plan(
         yt=yt,
         liked_path=paths.liked_songs,
@@ -838,9 +930,13 @@ def run_full_reset(
         missing_path=paths.missing_matches,
         create_playlists=True,
     )
+    ui.finish_step("Playlists created/updated")
+    ui.start_step("Finalize managed state")
     update_managed_playlists(apply_result.get("results", []), paths.managed)
     initialize_state(paths.liked_songs, paths.state)
     _set_bootstrap_completed(paths.bootstrap, completed=True)
+    ui.finish_step("Managed playlist index and state refreshed")
+    ui.finish_flow("Rebuild completed")
 
     return {
         "liked_count": len(liked),
@@ -914,6 +1010,70 @@ def _read_json_file(
         return None
 
 
+def _derive_stats_insights(
+    *,
+    liked_count: int,
+    managed_count: int,
+    pending_count: int,
+    validated_plan: dict[str, Any] | None,
+    plan_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    plan_playlists = 0
+    top_playlists: list[dict[str, Any]] = []
+    if isinstance(validated_plan, dict):
+        playlists = validated_plan.get("playlists", [])
+        if isinstance(playlists, list):
+            ranked: list[dict[str, Any]] = []
+            for item in playlists:
+                if not isinstance(item, dict):
+                    continue
+                songs = item.get("songs", [])
+                songs_count = len(songs) if isinstance(songs, list) else 0
+                ranked.append({"name": str(item.get("name", "Unnamed")), "songs": songs_count})
+            ranked.sort(key=lambda row: row["songs"], reverse=True)
+            plan_playlists = len(ranked)
+            top_playlists = ranked[:3]
+
+    coverage_ratio = 0.0
+    if plan_diagnostics.get("status") == "ok":
+        matched = int(plan_diagnostics.get("matched", 0))
+        missing = int(plan_diagnostics.get("missing", 0))
+        total = matched + missing
+        coverage_ratio = (matched / total) if total else 1.0
+
+    if liked_count >= 1000:
+        collection_shape = "Deep collection"
+    elif liked_count >= 250:
+        collection_shape = "Growing catalog"
+    elif liked_count > 0:
+        collection_shape = "Early collection"
+    else:
+        collection_shape = "Just getting started"
+
+    if pending_count >= 25:
+        pending_momentum = "High momentum"
+    elif pending_count > 0:
+        pending_momentum = "Steady momentum"
+    else:
+        pending_momentum = "No pending momentum"
+
+    identity_score = 0
+    if plan_diagnostics.get("status") == "ok":
+        identity_score = min(
+            100,
+            int((coverage_ratio * 65.0) + min(plan_playlists, 15) * 2 + min(managed_count, 10) * 1),
+        )
+
+    return {
+        "identity_score": identity_score,
+        "plan_playlists": plan_playlists,
+        "top_playlists": top_playlists,
+        "coverage_ratio": round(coverage_ratio, 4),
+        "collection_shape": collection_shape,
+        "pending_momentum": pending_momentum,
+    }
+
+
 def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
@@ -973,6 +1133,7 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         liked = None
 
     selected_plan = plan_path.resolve() if plan_path else paths.playlist_plan
+    validated_plan: dict[str, Any] | None = None
     plan_diagnostics: dict[str, Any] = {
         "status": "skipped_missing_plan",
         "plan_path": str(selected_plan),
@@ -1016,6 +1177,13 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         "new_plan": paths.new_plan.exists(),
         "missing_matches": paths.missing_matches.exists(),
     }
+    insights = _derive_stats_insights(
+        liked_count=len(liked) if isinstance(liked, list) else 0,
+        managed_count=len(playlist_items) if isinstance(playlist_items, list) else 0,
+        pending_count=len(new_likes) if isinstance(new_likes, list) else 0,
+        validated_plan=validated_plan,
+        plan_diagnostics=plan_diagnostics,
+    )
 
     return {
         "workspace_exists": paths.root.exists(),
@@ -1026,5 +1194,6 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         "liked_snapshot_count": len(liked) if isinstance(liked, list) else 0,
         "artifact_presence": artifact_presence,
         "plan_diagnostics": plan_diagnostics,
+        "insights": insights,
         "warnings": warnings,
     }

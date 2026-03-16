@@ -75,6 +75,9 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(result["new_likes_pending"], 1)
             self.assertEqual(result["liked_snapshot_count"], 2)
             self.assertEqual(result["plan_diagnostics"]["status"], "skipped_missing_plan")
+            self.assertIn("insights", result)
+            self.assertEqual(result["insights"]["identity_score"], 0)
+            self.assertEqual(result["insights"]["top_playlists"], [])
 
     def test_run_stats_valid_plan_diagnostics_with_default_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -112,6 +115,8 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(result["plan_diagnostics"]["missing"], 0)
             self.assertEqual(result["plan_diagnostics"]["loose"], 0)
             self.assertEqual(result["plan_diagnostics"]["ambiguous"], 0)
+            self.assertIn("insights", result)
+            self.assertEqual(result["insights"]["plan_playlists"], 1)
 
     def test_run_stats_with_custom_plan_missing_liked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

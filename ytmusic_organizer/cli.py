@@ -244,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "setup":
             if not json_output:
-                ui.title("ytmusic-organizer setup")
+                ui.command_header("ytmusic-organizer setup", "guided bootstrap")
             result = run_setup(
                 workspace=workspace,
                 auth_file=args.auth_file,
@@ -269,13 +269,19 @@ def main(argv: list[str] | None = None) -> int:
                         },
                     )
                 else:
-                    ui.success(f"Initialized workspace at {result['workspace']}")
-                    ui.success("Initial playlist build completed.")
+                    ui.render_recap(
+                        "Setup Complete",
+                        {
+                            "workspace": result["workspace"],
+                            "liked_tracks": result["liked_count"],
+                            "status": "initial playlist build completed",
+                        },
+                    )
             return 0
 
         if args.command == "sync":
             if not json_output:
-                ui.title("ytmusic-organizer sync")
+                ui.command_header("ytmusic-organizer sync", "incremental update")
             result = run_weekly_sync(
                 workspace=workspace,
                 mode=args.mode,
@@ -297,17 +303,24 @@ def main(argv: list[str] | None = None) -> int:
                     },
                 )
             elif result.get("new_likes", 0) == 0:
-                ui.warning("No new liked songs found.")
+                ui.render_callout(
+                    "info",
+                    "No new likes",
+                    ["No new liked songs were detected in this run."],
+                )
             else:
-                ui.success(
-                    f"Processed {result['new_likes']} new likes, "
-                    f"missing matches: {result.get('missing', 0)}"
+                ui.render_recap(
+                    "Sync Complete",
+                    {
+                        "new_likes": result["new_likes"],
+                        "missing_matches": result.get("missing", 0),
+                    },
                 )
             return 0
 
         if args.command == "rebuild":
             if not json_output:
-                ui.title("ytmusic-organizer rebuild")
+                ui.command_header("ytmusic-organizer rebuild", "destructive rebuild")
             if args.non_interactive and not args.yes and not args.dry_run:
                 raise RuntimeError("--yes is required when --non-interactive is set for rebuild")
             if not args.yes and not args.dry_run:
@@ -320,8 +333,7 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "rebuild", result={"message": "Cancelled by user"})
                     else:
-                        print()
-                        ui.warning("Cancelled.")
+                        ui.render_callout("warning", "Action cancelled", ["No changes were applied."])
                     return 1
             result = run_full_reset(
                 workspace=workspace,
@@ -346,14 +358,18 @@ def main(argv: list[str] | None = None) -> int:
                         },
                     )
                 else:
-                    ui.success(
-                        f"Rebuild completed. Liked songs: {result['liked_count']}, "
-                        f"deleted playlists: {result['deleted_playlists']}"
+                    ui.render_recap(
+                        "Rebuild Complete",
+                        {
+                            "liked_tracks": result["liked_count"],
+                            "deleted_playlists": result["deleted_playlists"],
+                        },
                     )
                     if result.get("skipped_legacy"):
-                        ui.warning(
-                            "Skipped legacy managed playlist entries (name-only): "
-                            + ", ".join(result["skipped_legacy"])
+                        ui.render_callout(
+                            "warning",
+                            "Legacy entries skipped",
+                            [", ".join(result["skipped_legacy"])],
                         )
             return 0
 
@@ -367,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "cleanup":
             if not json_output:
-                ui.title("ytmusic-organizer cleanup")
+                ui.command_header("ytmusic-organizer cleanup", "managed resource cleanup")
             if not args.yes and not args.dry_run:
                 answer = (
                     input(
@@ -380,8 +396,7 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "cleanup", result={"message": "Cancelled by user"})
                     else:
-                        print()
-                        ui.warning("Cancelled.")
+                        ui.render_callout("warning", "Action cancelled", ["No changes were applied."])
                     return 1
             result = run_cleanup(
                 workspace=workspace, local_only=args.local_only, dry_run=args.dry_run
@@ -399,14 +414,18 @@ def main(argv: list[str] | None = None) -> int:
                         },
                     )
                 else:
-                    ui.success(
-                        f"Cleanup completed. Deleted playlists: {result['deleted_playlists']}, "
-                        f"removed local files: {result['removed_local_files']}"
+                    ui.render_recap(
+                        "Cleanup Complete",
+                        {
+                            "deleted_playlists": result["deleted_playlists"],
+                            "removed_local_files": result["removed_local_files"],
+                        },
                     )
                     if result.get("skipped_legacy"):
-                        ui.warning(
-                            "Skipped legacy managed playlist entries (name-only): "
-                            + ", ".join(result["skipped_legacy"])
+                        ui.render_callout(
+                            "warning",
+                            "Legacy entries skipped",
+                            [", ".join(result["skipped_legacy"])],
                         )
             return 0
 
@@ -443,7 +462,7 @@ def main(argv: list[str] | None = None) -> int:
             if json_output:
                 emit_json("ok", "stats", result=result)
             else:
-                ui.title("ytmusic-organizer stats")
+                ui.command_header("ytmusic-organizer stats", "share-first dashboard")
                 ui.show_stats(result)
             return 0
 
