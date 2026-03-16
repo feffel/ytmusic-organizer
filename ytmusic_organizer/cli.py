@@ -8,7 +8,7 @@ import sys
 from . import __version__
 from .paths import default_workspace
 from .ui import WizardUI
-from .workflows import run_cleanup, run_full_reset, run_setup, run_stats, run_weekly_sync
+from .workflows import run_cleanup, run_demo, run_full_reset, run_setup, run_stats, run_weekly_sync
 
 
 def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> None:
@@ -169,6 +169,10 @@ def _base_parser() -> argparse.ArgumentParser:
     p_cleanup.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_cleanup.add_argument("--local-only", action="store_true", help="Only remove local artifacts, keep remote playlists")
 
+    p_demo = sub.add_parser("demo", help="Live setup walkthrough simulation (no auth/download/write)")
+    add_workspace_argument(p_demo)
+    p_demo.add_argument("--mode", choices=["manual", "api"], default="manual", help="Simulated classification mode")
+
     p_stats = sub.add_parser("stats", help="Show local workspace stats and non-failing diagnostics")
     add_workspace_argument(p_stats)
     add_json_argument(p_stats)
@@ -293,6 +297,14 @@ def main(argv: list[str] | None = None) -> int:
                             "Skipped legacy managed playlist entries (name-only): "
                             + ", ".join(result["skipped_legacy"])
                         )
+            return 0
+
+        if args.command == "demo":
+            run_demo(
+                workspace=workspace,
+                mode=args.mode,
+                emit_ui=not json_output,
+            )
             return 0
 
         if args.command == "cleanup":

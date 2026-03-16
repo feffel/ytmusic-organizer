@@ -303,6 +303,62 @@ def _load_managed_playlists(paths: WorkspacePaths) -> list[str]:
     return [str(name) for name in playlists if isinstance(name, str) and str(name).strip()]
 
 
+def run_demo(
+    workspace: Path,
+    mode: str = "manual",
+    emit_ui: bool = True,
+) -> dict[str, Any]:
+    selected_mode = (mode or "manual").strip().lower()
+    if selected_mode not in {"manual", "api"}:
+        raise ValueError("mode must be one of: manual, api")
+
+    ui = WizardUI(enabled=emit_ui)
+    ui.title("ytmusic-organizer demo")
+    ui.warning("DEMO ONLY - no auth, downloads, network calls, or file writes.")
+
+    ui.step("Workspace and config")
+    ui.note(f"Workspace context (simulated): {workspace}")
+    ui.note(f"Classification mode (simulated): {selected_mode}")
+    ui.success("Workspace ready (simulated)")
+
+    ui.step("Auth check")
+    ui.note("Using simulated browser headers: cookie, x-goog-authuser.")
+    ui.success("Auth ready (simulated)")
+
+    fake_liked_count = 48
+    ui.step("Export full liked songs")
+    ui.success(f"Exported {fake_liked_count} liked songs (simulated)")
+
+    ui.step("Generate playlist plan")
+    if selected_mode == "manual":
+        ui.note("Manual mode simulation: prompt opened and JSON pasted.")
+    else:
+        ui.note("API mode simulation: model returned validated plan JSON.")
+    fake_playlists = 7
+    ui.success(f"Plan ready with {fake_playlists} playlists (simulated)")
+
+    ui.step("Create and fill playlists")
+    fake_added = 42
+    fake_missing = 3
+    ui.success(
+        f"Playlists created/updated (simulated): added={fake_added}, missing={fake_missing}"
+    )
+
+    ui.step("Initialize incremental state")
+    ui.success("State initialized (simulated)")
+    ui.success("Demo completed (simulated)")
+
+    return {
+        "simulated": True,
+        "workspace": str(workspace),
+        "mode": selected_mode,
+        "liked_count": fake_liked_count,
+        "playlists_in_plan": fake_playlists,
+        "would_add_items": fake_added,
+        "missing": fake_missing,
+    }
+
+
 def run_setup(
     workspace: Path,
     auth_file: str | None,

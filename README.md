@@ -113,6 +113,7 @@ ytmo sync --mode api
 - `ytmo sync [--mode manual|api] [--non-interactive] [--dry-run]`
 - `ytmo rebuild [--yes] [--mode manual|api] [--non-interactive] [--dry-run]`
 - `ytmo cleanup [--yes] [--local-only] [--dry-run]`
+- `ytmo demo [--mode manual|api]` (live setup walkthrough simulation; no auth/download/write)
 - `ytmo stats [--plan PATH]` (non-failing diagnostics against workspace or custom plan)
 
 Common option:
@@ -121,6 +122,7 @@ Common option:
 - `--json` (machine-readable output; keeps default Rich output unchanged when omitted)
 - `--dry-run` (simulate without mutating remote playlists or workspace files)
 - `--version` (print installed CLI version)
+- `ytmo demo` intentionally does not support `--json`; output is terminal walkthrough only
 
 `--json` example:
 
@@ -158,6 +160,7 @@ Run with `--mode api` to auto-generate plan JSON.
 - `ytmo sync` requires completed setup and will instruct if missing.
 - `ytmo cleanup` deletes playlists managed by this tool and removes local managed artifacts.
 - `--dry-run` mode for `setup/sync/rebuild/cleanup` performs read-only simulation (manual mode uses temporary prompt files outside workspace).
+- `ytmo demo` is always simulation-only and never performs auth, network calls, playlist mutations, or workspace writes.
 - `ytmo stats` is read-only and never rewrites `data/missing_matches.json`.
 
 ## Local workspace files

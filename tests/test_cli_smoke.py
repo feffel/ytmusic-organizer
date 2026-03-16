@@ -19,6 +19,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("sync", result.stdout)
         self.assertIn("rebuild", result.stdout)
         self.assertIn("cleanup", result.stdout)
+        self.assertIn("demo", result.stdout)
         self.assertIn("--version", result.stdout)
         self.assertIn(__version__, result.stdout)
         self.assertNotIn("preview", result.stdout)
@@ -114,6 +115,51 @@ class CliSmokeTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertIn("\nWARN Cancelled.", result.stdout)
+
+    def test_demo_runs_with_default_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            result = subprocess.run(
+                [sys.executable, "-m", "ytmusic_organizer.cli", "demo", "--workspace", str(workspace)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("DEMO ONLY", result.stdout)
+            self.assertFalse(workspace.exists())
+
+    def test_demo_runs_for_manual_and_api_modes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            for mode in ("manual", "api"):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "ytmusic_organizer.cli",
+                        "demo",
+                        "--workspace",
+                        str(workspace),
+                        "--mode",
+                        mode,
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIn(f"Classification mode (simulated): {mode}", result.stdout)
+
+    def test_demo_invalid_mode_returns_parse_error(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "demo", "--mode", "auto"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid choice", result.stderr)
 
 
 if __name__ == "__main__":

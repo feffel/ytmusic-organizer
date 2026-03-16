@@ -231,6 +231,16 @@ class CliJsonOutputTests(unittest.TestCase):
             self.assertTrue(missing_matches.exists())
             self.assertEqual(json.loads(missing_matches.read_text(encoding="utf-8")), original_missing)
 
+    def test_demo_rejects_json_flag(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "demo", "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("unrecognized arguments: --json", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

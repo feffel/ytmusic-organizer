@@ -15,6 +15,8 @@ Policy:
 
 ## Commands
 
+The recording session script uses `ytmo demo` (manual + api simulation modes) as the primary walkthrough source.
+
 Record cast + validate output:
 
 ```bash

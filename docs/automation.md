@@ -55,6 +55,10 @@ All mutable state lives in the workspace (`config.toml`, `state.json`, `managed_
   - `ytmo stats --json`
   - `ytmo stats --plan /absolute/path/to/plan.json --json`
 
+Demo note:
+- `ytmo demo` is intentionally terminal-only simulation and does not support `--json`.
+- Use it for onboarding/live walkthroughs, not machine integration.
+
 ## Manual Mode Input Contract
 
 When running `--mode manual`, the command writes a filled prompt file in workspace `data/` and then waits for JSON on stdin.

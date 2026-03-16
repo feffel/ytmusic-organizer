@@ -136,7 +136,7 @@ Reads: `data/playlist_plan.json`.
 Writes: `managed_playlists.json`.
 
 - `ytmusic_organizer/workflows.py`
-Orchestration for setup/sync/rebuild/cleanup/stats and dry-run simulation paths.
+Orchestration for setup/sync/rebuild/cleanup/stats, dry-run simulation paths, and terminal-only demo simulation.
 
 - `ytmusic_organizer/cli.py`
 Command parsing and user-facing flow control.
@@ -170,6 +170,7 @@ Current `Makefile` targets are:
 - `make sync` -> `ytmo sync`
 - `make rebuild` -> `ytmo rebuild`
 - `make cleanup` -> `ytmo cleanup`
+- `ytmo demo` -> simulation-only setup walkthrough (`--mode manual|api`), no remote/local side effects
 - `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
 - `make demo-record` -> record CLI demo cast to ignored artifacts
@@ -230,6 +231,7 @@ CI automation:
 - `ytmo setup` is non-destructive for existing remote playlists (create/populate only).
 - `--dry-run` for setup/sync/rebuild/cleanup performs read-only simulation: no remote playlist mutations and no workspace writes.
 - Manual-mode dry-run writes prompt text only to temporary files outside workspace and auto-deletes them.
+- `ytmo demo` is always simulation-only: no auth setup, no YTMusic/OpenAI calls, no playlist mutations, and no workspace writes.
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.

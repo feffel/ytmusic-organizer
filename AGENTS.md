@@ -19,9 +19,10 @@ These instructions apply to this repository.
 - Prefer CLI entrypoints over ad-hoc scripts:
   - `ytmo setup`
   - `ytmo sync`
-  - `ytmo reset`
+  - `ytmo rebuild`
   - `ytmo cleanup`
   - `ytmo stats`
+  - `ytmo demo`
 - Make targets must reflect actual supported CLI behavior.
 
 ## State and Safety Conventions
@@ -29,7 +30,7 @@ These instructions apply to this repository.
 - Do not overwrite or expose `browser.json`.
 - Only delete playlists listed in `managed_playlists.json`.
 - Never perform arbitrary playlist deletion.
-- `state.json` should grow during normal sync; full reset may reinitialize it.
+- `state.json` should grow during normal sync; full rebuild may reinitialize it.
 
 ## Data Artifact Conventions
 - Generated workspace artifacts include:
