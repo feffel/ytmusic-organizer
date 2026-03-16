@@ -22,23 +22,70 @@ def _extract_json(text: str) -> Any:
     raise ValueError("Could not parse JSON from model response")
 
 
-def read_json_from_stdin() -> dict[str, Any]:
+def _read_interactive_json_candidate() -> str:
+    lines: list[str] = []
+    mode: str | None = None
+
     while True:
-        raw = sys.stdin.read()
+        try:
+            line = input()
+        except EOFError:
+            return "\n".join(lines)
+
+        stripped = line.strip()
+        if mode is None:
+            if not stripped:
+                continue
+            lines.append(line)
+            mode = "json" if stripped.startswith("{") or stripped.startswith("[") else "raw"
+        elif mode == "raw":
+            if not stripped:
+                return "\n".join(lines)
+            lines.append(line)
+        else:
+            lines.append(line)
+            if not stripped:
+                return "\n".join(lines)
+
+        candidate = "\n".join(lines)
+        try:
+            _extract_json(candidate)
+            return candidate
+        except Exception:
+            continue
+
+
+def read_json_from_stdin() -> dict[str, Any]:
+    interactive = sys.stdin.isatty()
+
+    while True:
+        raw = _read_interactive_json_candidate() if interactive else sys.stdin.read()
         if not raw.strip():
-            if sys.stdin.isatty():
-                print("No JSON received on stdin. Paste JSON and press Ctrl-D.", file=sys.stderr)
+            if interactive:
+                print(
+                    "No JSON received on stdin. Paste JSON and submit with Enter (use a blank line if needed).",
+                    file=sys.stderr,
+                )
                 continue
             raise ValueError("No JSON received on stdin")
         try:
             value = _extract_json(raw)
         except Exception as exc:
-            if sys.stdin.isatty():
-                print(f"Invalid JSON from stdin: {exc}. Paste valid JSON and press Ctrl-D.", file=sys.stderr)
+            if interactive:
+                print(
+                    f"Invalid JSON from stdin: {exc}. Paste valid JSON and submit again.",
+                    file=sys.stderr,
+                )
                 continue
             raise ValueError(f"Invalid JSON from stdin: {exc}") from exc
 
         if not isinstance(value, dict):
+            if interactive:
+                print(
+                    "Invalid JSON from stdin: top-level value must be an object. Paste valid JSON and submit again.",
+                    file=sys.stderr,
+                )
+                continue
             raise ValueError("Invalid JSON from stdin: top-level value must be an object")
         return value
 

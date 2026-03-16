@@ -4,6 +4,12 @@ from ytmusic_organizer.cli import build_helpful_error
 
 
 class CliErrorGuidanceTests(unittest.TestCase):
+    def test_auth_headers_invalid_has_actionable_guidance(self) -> None:
+        msg = build_helpful_error(RuntimeError("AUTH_HEADERS_INVALID::Missing required header(s): cookie"))
+        self.assertIn("Auth headers are incomplete or malformed", msg)
+        self.assertIn("blank line", msg)
+        self.assertIn("cookie, x-goog-authuser", msg)
+
     def test_auth_missing_includes_docs_and_fix_steps(self) -> None:
         msg = build_helpful_error(FileNotFoundError("Auth file not found: /tmp/missing.json"))
         self.assertIn("Auth file is missing", msg)

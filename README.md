@@ -136,7 +136,8 @@ The CLI exports song JSON and waits for your model response JSON on stdin:
 
 - full flows write prompt to `~/.ytmusic-organizer/data/full_reset_prompt_filled.txt`
 - weekly sync writes prompt to `~/.ytmusic-organizer/data/new_songs_prompt_filled.txt`
-- provide model JSON by piping/pasting into stdin (Ctrl-D to submit)
+- provide model JSON by piping/pasting into stdin
+- interactive paste auto-submits when closing braces are complete; otherwise submit with one blank line
 - default workspace path is `~/.ytmusic-organizer` (override with `--workspace`)
 
 Prompt templates are packaged in `ytmusic_organizer/prompts/`.

@@ -32,6 +32,19 @@ def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> Non
 def build_helpful_error(exc: Exception) -> str:
     text = str(exc)
 
+    if text.startswith("AUTH_HEADERS_INVALID::"):
+        reason = text.replace("AUTH_HEADERS_INVALID::", "", 1)
+        return (
+            "Auth headers are incomplete or malformed.\n"
+            f"{reason}\n\n"
+            "How to fix:\n"
+            "1. Re-run setup and paste full request headers.\n"
+            "2. For JSON headers, paste through the closing '}'.\n"
+            "3. For raw header lines, finish with one blank line.\n"
+            "4. Include at least these headers: cookie, x-goog-authuser.\n"
+            "5. Use either raw header lines or JSON object format from browser network tools."
+        )
+
     if text.startswith("PREVIEW_MISSING_PLAN::"):
         payload = text.replace("PREVIEW_MISSING_PLAN::", "", 1)
         plan_path, _, workspace_part = payload.partition("::workspace=")
