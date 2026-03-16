@@ -1,4 +1,4 @@
-.PHONY: check-venv setup sync reset cleanup preview stats test demo-record demo-render demo-check launch-generate
+.PHONY: check-venv setup sync reset cleanup stats test demo-record demo-render demo-check launch-generate
 
 VENV_PYTHON := .venv/bin/python
 
@@ -16,9 +16,6 @@ reset: check-venv
 
 cleanup: check-venv
 	$(VENV_PYTHON) -m ytmusic_organizer.cli cleanup
-
-preview: check-venv
-	$(VENV_PYTHON) -m ytmusic_organizer.cli preview
 
 stats: check-venv
 	$(VENV_PYTHON) -m ytmusic_organizer.cli stats

@@ -20,7 +20,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("cleanup", result.stdout)
         self.assertIn("--version", result.stdout)
         self.assertIn(__version__, result.stdout)
-        self.assertIn("writes missing_matches.json", result.stdout)
+        self.assertNotIn("preview", result.stdout)
 
     def test_version_runs(self) -> None:
         result = subprocess.run(

@@ -43,6 +43,7 @@ All mutable state lives in the workspace (`config.toml`, `state.json`, `managed_
   - `ytmo cleanup --yes --local-only --json`
 - Stats:
   - `ytmo stats --json`
+  - `ytmo stats --plan /absolute/path/to/plan.json --json`
 
 ## Manual Mode Input Contract
 
@@ -79,8 +80,12 @@ Cancelled shape:
 Stats success shape:
 
 ```json
-{"status":"ok","command":"stats","result":{"processed_likes":0,"managed_playlists":0,"missing_matches":0}}
+{"status":"ok","command":"stats","result":{"processed_likes":0,"managed_playlists":0,"missing_matches":0,"plan_diagnostics":{"status":"skipped_missing_plan","plan_path":"/abs/ws/data/playlist_plan.json","liked_path":"/abs/ws/data/liked_songs.json"},"warnings":[]}}
 ```
+
+Notes:
+- `stats` is non-failing for local data issues (missing/invalid artifacts are surfaced through `plan_diagnostics.status` and `warnings`).
+- `stats` is read-only and does not rewrite `data/missing_matches.json`.
 
 ## Exit Codes
 

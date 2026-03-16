@@ -131,7 +131,7 @@ Reads: `data/playlist_plan.json`.
 Writes: `managed_playlists.json`.
 
 - `ytmusic_organizer/workflows.py`
-Orchestration for setup/sync/reset/preview/cleanup/stats.
+Orchestration for setup/sync/reset/cleanup/stats.
 
 - `ytmusic_organizer/cli.py`
 Command parsing and user-facing flow control.
@@ -165,9 +165,7 @@ Current `Makefile` targets are:
 - `make sync` -> `ytmo sync`
 - `make reset` -> `ytmo reset`
 - `make cleanup` -> `ytmo cleanup`
-- `make preview` -> `ytmo preview`
-  - Prerequisites: `data/liked_songs.json` and a full plan JSON (`data/playlist_plan.json` by default or `--plan PATH`).
-- `make stats` -> `ytmo stats`
+- `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
 - `make demo-record` -> record CLI demo cast to ignored artifacts
 - `make demo-render` -> render demo gif/mp4 from cast
@@ -214,7 +212,7 @@ CI automation:
 - Consumed by `apply_new_likes` and can be overwritten each sync cycle.
 
 ## `data/missing_matches.json`
-- Rewritten each apply/preview run with current unresolved mapping items.
+- Rewritten each apply run with current unresolved mapping items.
 
 # Safety Rules
 - Only delete playlists whose IDs are listed in `managed_playlists.json` schema v2.
@@ -225,8 +223,8 @@ CI automation:
 - `state.json` should only grow during incremental sync; full reset intentionally reinitializes it.
 - `ytmo reset` and `ytmo cleanup` are destructive by design and require explicit confirmation unless `--yes` is passed.
 - `ytmo setup` is non-destructive for existing remote playlists (create/populate only).
-- `ytmo preview` fails fast when required local artifacts are missing and provides guided remediation.
-- `ytmo preview` is diagnostic but still rewrites `data/missing_matches.json`.
+- `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
+- `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
 
 # Known Limitations

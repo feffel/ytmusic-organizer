@@ -328,38 +328,23 @@ def apply_new_likes(
     return {"results": results, "missing": len(missing), "processed": len(matched_video_ids)}
 
 
-def preview_plan(liked_path: Path, plan_path: Path, missing_path: Path) -> dict[str, Any]:
-    liked = json.loads(liked_path.read_text(encoding="utf-8"))
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
-
+def diagnose_plan_matches(liked: list[dict[str, Any]], plan: dict[str, Any]) -> dict[str, int]:
     total_matched = 0
     total_missing = 0
     total_loose = 0
     total_ambiguous = 0
-
-    missing_items: list[dict[str, str]] = []
 
     for playlist in plan.get("playlists", []):
         for song in playlist.get("songs", []):
             match, match_type = find_match(song, liked)
             if not match:
                 total_missing += 1
-                missing_items.append(
-                    {
-                        "playlist": playlist.get("name", ""),
-                        "title": song.get("title", ""),
-                        "artist": song.get("artist", ""),
-                    }
-                )
             else:
                 total_matched += 1
                 if match_type == "loose":
                     total_loose += 1
                 elif match_type == "ambiguous":
                     total_ambiguous += 1
-
-    missing_path.parent.mkdir(parents=True, exist_ok=True)
-    missing_path.write_text(json.dumps(missing_items, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return {
         "matched": total_matched,

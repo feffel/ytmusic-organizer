@@ -21,7 +21,7 @@ These instructions apply to this repository.
   - `ytmo sync`
   - `ytmo reset`
   - `ytmo cleanup`
-  - `ytmo preview`
+  - `ytmo stats`
 - Make targets must reflect actual supported CLI behavior.
 
 ## State and Safety Conventions

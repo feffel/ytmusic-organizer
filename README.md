@@ -112,8 +112,7 @@ ytmo sync --mode api
 - `ytmo sync [--mode manual|api] [--non-interactive]`
 - `ytmo reset [--yes] [--mode manual|api] [--non-interactive]`
 - `ytmo cleanup [--yes] [--local-only]`
-- `ytmo preview [--plan PATH]` (requires `data/liked_songs.json` plus a full plan JSON)
-- `ytmo stats`
+- `ytmo stats [--plan PATH]` (non-failing diagnostics against workspace or custom plan)
 
 Common option:
 
@@ -156,7 +155,7 @@ Run with `--mode api` to auto-generate plan JSON.
 - `ytmo reset` is destructive and requires confirmation unless `--yes` is passed.
 - `ytmo sync` requires completed setup and will instruct if missing.
 - `ytmo cleanup` deletes playlists managed by this tool and removes local managed artifacts.
-- `ytmo preview` is diagnostic but writes `data/missing_matches.json` as output.
+- `ytmo stats` is read-only and never rewrites `data/missing_matches.json`.
 
 ## Local workspace files
 
@@ -182,9 +181,7 @@ These are intentionally ignored from git.
 - `Setup has not been completed`: run `ytmo setup`.
 - `Setup interrupted`: run `ytmo setup` to resume, or `ytmo setup --restart` to restart.
 - API mode key error: set `OPENAI_API_KEY` or switch to `--mode manual`.
-- `Preview prerequisites are missing`:
-  - ensure `data/playlist_plan.json` exists (or pass `--plan /absolute/path/to/plan.json`)
-  - ensure `data/liked_songs.json` exists (run `ytmo setup` or `ytmo reset --yes` to generate it)
+- `ytmo stats` shows diagnostics with status values (`ok`, `skipped_missing_plan`, `skipped_missing_liked`, `invalid_plan`, `invalid_liked`) and warnings instead of failing on missing/corrupt local artifacts.
 
 ## Development
 

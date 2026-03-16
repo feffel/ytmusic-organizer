@@ -20,11 +20,11 @@ from .ytmusic_ops import (
     apply_new_likes,
     apply_plan,
     delete_managed_playlists,
+    diagnose_plan_matches,
     export_liked,
     export_new_likes,
     initialize_state,
     make_ytmusic,
-    preview_plan,
     update_managed_playlists,
 )
 
@@ -535,23 +535,6 @@ def run_full_reset(
     }
 
 
-def run_preview(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
-    paths = WorkspacePaths(workspace)
-    ensure_workspace_dirs(paths)
-    selected_plan = plan_path or paths.playlist_plan
-    if not selected_plan.exists():
-        raise RuntimeError(
-            f"PREVIEW_MISSING_PLAN::{selected_plan}::workspace={paths.root}"
-        )
-    if not paths.liked_songs.exists():
-        raise RuntimeError(
-            f"PREVIEW_MISSING_LIKED::{paths.liked_songs}::workspace={paths.root}"
-        )
-    plan_data = json.loads(selected_plan.read_text(encoding="utf-8"))
-    validate_full_plan(plan_data)
-    return preview_plan(paths.liked_songs, selected_plan, paths.missing_matches)
-
-
 def run_cleanup(workspace: Path, local_only: bool = False) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
@@ -572,31 +555,99 @@ def run_cleanup(workspace: Path, local_only: bool = False) -> dict[str, Any]:
     return {"deleted_playlists": deleted, "removed_local_files": removed_local, "skipped_legacy": skipped_legacy}
 
 
-def _read_json_file(path: Path) -> Any | None:
+def _read_json_file(path: Path, *, warnings: list[str] | None = None, label: str | None = None) -> Any | None:
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        if warnings is not None:
+            subject = label or str(path)
+            warnings.append(f"{subject} could not be parsed: {exc}")
+        return None
 
 
-def run_stats(workspace: Path) -> dict[str, Any]:
+def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
     ensure_workspace_dirs(paths)
+    warnings: list[str] = []
 
-    state = _read_json_file(paths.state)
-    managed = _read_json_file(paths.managed)
-    missing = _read_json_file(paths.missing_matches)
-    new_likes = _read_json_file(paths.new_likes)
-    liked = _read_json_file(paths.liked_songs)
+    state = _read_json_file(paths.state, warnings=warnings, label="state.json")
+    managed = _read_json_file(paths.managed, warnings=warnings, label="managed_playlists.json")
+    missing = _read_json_file(paths.missing_matches, warnings=warnings, label="data/missing_matches.json")
+    new_likes = _read_json_file(paths.new_likes, warnings=warnings, label="data/new_likes.json")
+    liked = _read_json_file(paths.liked_songs, warnings=warnings, label="data/liked_songs.json")
 
-    processed_ids = state.get("processed_video_ids", []) if isinstance(state, dict) else []
-    playlist_items = managed.get("playlists", []) if isinstance(managed, dict) else []
+    processed_ids: list[str] = []
+    if isinstance(state, dict):
+        ids = state.get("processed_video_ids", [])
+        if isinstance(ids, list):
+            processed_ids = ids
+        else:
+            warnings.append("state.json has incompatible shape: processed_video_ids must be an array.")
+    elif state is not None:
+        warnings.append("state.json has incompatible shape: root must be an object.")
+
+    playlist_items: list[Any] = []
+    if isinstance(managed, dict):
+        playlists = managed.get("playlists", [])
+        if isinstance(playlists, list):
+            playlist_items = playlists
+        else:
+            warnings.append("managed_playlists.json has incompatible shape: playlists must be an array.")
+    elif managed is not None:
+        warnings.append("managed_playlists.json has incompatible shape: root must be an object.")
 
     if isinstance(missing, list):
         missing_matches = len(missing)
     elif isinstance(missing, dict):
         missing_matches = len(missing.get("missing", []))
     else:
+        if missing is not None:
+            warnings.append("data/missing_matches.json has incompatible shape: root must be array/object.")
         missing_matches = 0
+
+    if new_likes is not None and not isinstance(new_likes, list):
+        warnings.append("data/new_likes.json has incompatible shape: root must be an array.")
+        new_likes = None
+
+    if liked is not None and not isinstance(liked, list):
+        warnings.append("data/liked_songs.json has incompatible shape: root must be an array.")
+        liked = None
+
+    selected_plan = (plan_path.resolve() if plan_path else paths.playlist_plan)
+    plan_diagnostics: dict[str, Any] = {
+        "status": "skipped_missing_plan",
+        "plan_path": str(selected_plan),
+        "liked_path": str(paths.liked_songs),
+    }
+
+    if selected_plan.exists():
+        if not paths.liked_songs.exists():
+            plan_diagnostics["status"] = "skipped_missing_liked"
+        else:
+            plan_data = _read_json_file(
+                selected_plan,
+                warnings=warnings,
+                label=f"plan file ({selected_plan})",
+            )
+            if not isinstance(plan_data, dict):
+                if plan_data is not None:
+                    warnings.append(f"Plan file has incompatible shape: {selected_plan} must be a JSON object.")
+                plan_diagnostics["status"] = "invalid_plan"
+            else:
+                try:
+                    validated_plan = validate_full_plan(plan_data)
+                except Exception as exc:
+                    warnings.append(f"Plan file failed validation: {selected_plan}: {exc}")
+                    plan_diagnostics["status"] = "invalid_plan"
+                else:
+                    if not isinstance(liked, list):
+                        plan_diagnostics["status"] = "invalid_liked"
+                    else:
+                        diagnostics = diagnose_plan_matches(liked, validated_plan)
+                        plan_diagnostics["status"] = "ok"
+                        plan_diagnostics.update(diagnostics)
 
     artifact_presence = {
         "config": paths.config.exists(),
@@ -617,4 +668,6 @@ def run_stats(workspace: Path) -> dict[str, Any]:
         "new_likes_pending": len(new_likes) if isinstance(new_likes, list) else 0,
         "liked_snapshot_count": len(liked) if isinstance(liked, list) else 0,
         "artifact_presence": artifact_presence,
+        "plan_diagnostics": plan_diagnostics,
+        "warnings": warnings,
     }

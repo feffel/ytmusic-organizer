@@ -59,7 +59,7 @@ class CliJsonOutputTests(unittest.TestCase):
             self.assertEqual(payload["command"], "setup")
             self.assertIn("Auth file is missing", payload["error"])
 
-    def test_preview_missing_default_plan_returns_actionable_error(self) -> None:
+    def test_stats_missing_default_plan_returns_ok_with_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             result = subprocess.run(
@@ -67,7 +67,7 @@ class CliJsonOutputTests(unittest.TestCase):
                     sys.executable,
                     "-m",
                     "ytmusic_organizer.cli",
-                    "preview",
+                    "stats",
                     "--workspace",
                     str(workspace),
                     "--json",
@@ -76,15 +76,14 @@ class CliJsonOutputTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.returncode, 0)
             payload = json.loads(result.stdout.strip())
-            self.assertEqual(payload["status"], "error")
-            self.assertEqual(payload["command"], "preview")
-            self.assertIn("Preview prerequisites are missing", payload["error"])
-            self.assertIn("Plan file not found", payload["error"])
-            self.assertIn("ytmo setup", payload["error"])
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["command"], "stats")
+            self.assertEqual(payload["result"]["plan_diagnostics"]["status"], "skipped_missing_plan")
+            self.assertIn("warnings", payload["result"])
 
-    def test_preview_missing_liked_snapshot_returns_actionable_error(self) -> None:
+    def test_stats_missing_liked_snapshot_returns_ok_with_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             data_dir = workspace / "data"
@@ -101,7 +100,7 @@ class CliJsonOutputTests(unittest.TestCase):
                     sys.executable,
                     "-m",
                     "ytmusic_organizer.cli",
-                    "preview",
+                    "stats",
                     "--workspace",
                     str(workspace),
                     "--plan",
@@ -112,15 +111,13 @@ class CliJsonOutputTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.returncode, 0)
             payload = json.loads(result.stdout.strip())
-            self.assertEqual(payload["status"], "error")
-            self.assertEqual(payload["command"], "preview")
-            self.assertIn("Preview prerequisites are missing", payload["error"])
-            self.assertIn("Liked songs snapshot not found", payload["error"])
-            self.assertIn("ytmo setup", payload["error"])
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["command"], "stats")
+            self.assertEqual(payload["result"]["plan_diagnostics"]["status"], "skipped_missing_liked")
 
-    def test_preview_success_writes_missing_matches_and_returns_counts(self) -> None:
+    def test_stats_success_returns_diagnostics_and_does_not_rewrite_missing_matches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             data_dir = workspace / "data"
@@ -149,13 +146,16 @@ class CliJsonOutputTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            missing_matches = data_dir / "missing_matches.json"
+            original_missing = [{"playlist": "Existing", "title": "Keep", "artist": "Same"}]
+            missing_matches.write_text(json.dumps(original_missing), encoding="utf-8")
 
             result = subprocess.run(
                 [
                     sys.executable,
                     "-m",
                     "ytmusic_organizer.cli",
-                    "preview",
+                    "stats",
                     "--workspace",
                     str(workspace),
                     "--json",
@@ -167,15 +167,14 @@ class CliJsonOutputTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             payload = json.loads(result.stdout.strip())
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["command"], "preview")
-            self.assertEqual(payload["result"]["matched"], 1)
-            self.assertEqual(payload["result"]["missing"], 0)
-            self.assertEqual(payload["result"]["loose"], 0)
-            self.assertEqual(payload["result"]["ambiguous"], 0)
-
-            missing_matches = data_dir / "missing_matches.json"
+            self.assertEqual(payload["command"], "stats")
+            self.assertEqual(payload["result"]["plan_diagnostics"]["status"], "ok")
+            self.assertEqual(payload["result"]["plan_diagnostics"]["matched"], 1)
+            self.assertEqual(payload["result"]["plan_diagnostics"]["missing"], 0)
+            self.assertEqual(payload["result"]["plan_diagnostics"]["loose"], 0)
+            self.assertEqual(payload["result"]["plan_diagnostics"]["ambiguous"], 0)
             self.assertTrue(missing_matches.exists())
-            self.assertEqual(json.loads(missing_matches.read_text(encoding="utf-8")), [])
+            self.assertEqual(json.loads(missing_matches.read_text(encoding="utf-8")), original_missing)
 
 
 if __name__ == "__main__":

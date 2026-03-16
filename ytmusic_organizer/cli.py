@@ -8,7 +8,7 @@ import sys
 from . import __version__
 from .paths import default_workspace
 from .ui import WizardUI
-from .workflows import run_cleanup, run_full_reset, run_preview, run_setup, run_stats, run_weekly_sync
+from .workflows import run_cleanup, run_full_reset, run_setup, run_stats, run_weekly_sync
 
 
 def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> None:
@@ -43,38 +43,6 @@ def build_helpful_error(exc: Exception) -> str:
             "3. For raw header lines, finish with one blank line.\n"
             "4. Include at least these headers: cookie, x-goog-authuser.\n"
             "5. Use either raw header lines or JSON object format from browser network tools."
-        )
-
-    if text.startswith("PREVIEW_MISSING_PLAN::"):
-        payload = text.replace("PREVIEW_MISSING_PLAN::", "", 1)
-        plan_path, _, workspace_part = payload.partition("::workspace=")
-        workspace = workspace_part or "<workspace>"
-        return (
-            "Preview prerequisites are missing.\n"
-            f"Plan file not found: {plan_path}\n"
-            f"Workspace: {workspace}\n\n"
-            "How to fix:\n"
-            "1. If this is a fresh workspace, run:\n"
-            "   ytmo setup\n"
-            "2. If you want a full rebuild plan first, run:\n"
-            "   ytmo reset --yes\n"
-            "3. If you already have a plan JSON elsewhere, run:\n"
-            "   ytmo preview --plan /absolute/path/to/plan.json"
-        )
-
-    if text.startswith("PREVIEW_MISSING_LIKED::"):
-        payload = text.replace("PREVIEW_MISSING_LIKED::", "", 1)
-        liked_path, _, workspace_part = payload.partition("::workspace=")
-        workspace = workspace_part or "<workspace>"
-        return (
-            "Preview prerequisites are missing.\n"
-            f"Liked songs snapshot not found: {liked_path}\n"
-            f"Workspace: {workspace}\n\n"
-            "How to fix:\n"
-            "1. Generate liked songs snapshot with setup:\n"
-            "   ytmo setup\n"
-            "2. Or regenerate it during full reset:\n"
-            "   ytmo reset --yes"
         )
 
     if "Auth file not found:" in text:
@@ -190,17 +158,10 @@ def _base_parser() -> argparse.ArgumentParser:
     p_cleanup.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_cleanup.add_argument("--local-only", action="store_true", help="Only remove local artifacts, keep remote playlists")
 
-    p_preview = sub.add_parser(
-        "preview",
-        help="Preview diagnostics (requires liked_songs.json + full plan; writes missing_matches.json)",
-    )
-    add_workspace_argument(p_preview)
-    add_json_argument(p_preview)
-    p_preview.add_argument("--plan", help="Path to plan JSON (defaults to workspace plan)")
-
-    p_stats = sub.add_parser("stats", help="Show local workspace stats for launch/reporting")
+    p_stats = sub.add_parser("stats", help="Show local workspace stats and non-failing diagnostics")
     add_workspace_argument(p_stats)
     add_json_argument(p_stats)
+    p_stats.add_argument("--plan", help="Path to full plan JSON for diagnostics (defaults to workspace plan)")
 
     return parser
 
@@ -298,20 +259,6 @@ def main(argv: list[str] | None = None) -> int:
                     )
             return 0
 
-        if args.command == "preview":
-            if not json_output:
-                ui.title("ytmusic-organizer preview")
-            plan_path = Path(args.plan).resolve() if args.plan else None
-            result = run_preview(workspace=workspace, plan_path=plan_path)
-            if json_output:
-                emit_json("ok", "preview", result=result)
-            else:
-                ui.pretty(
-                    f"Matched: {result['matched']}, missing: {result['missing']}, "
-                    f"loose: {result['loose']}, ambiguous: {result['ambiguous']}"
-                )
-            return 0
-
         if args.command == "cleanup":
             if not json_output:
                 ui.title("ytmusic-organizer cleanup")
@@ -342,7 +289,35 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "stats":
-            result = run_stats(workspace=workspace)
+            plan_path = Path(args.plan).resolve() if args.plan else None
+            try:
+                result = run_stats(workspace=workspace, plan_path=plan_path)
+            except Exception as exc:
+                data_dir = workspace / "data"
+                result = {
+                    "workspace_exists": workspace.exists(),
+                    "processed_likes": 0,
+                    "managed_playlists": 0,
+                    "missing_matches": 0,
+                    "new_likes_pending": 0,
+                    "liked_snapshot_count": 0,
+                    "artifact_presence": {
+                        "config": (workspace / "config.toml").exists(),
+                        "state": (workspace / "state.json").exists(),
+                        "managed_playlists": (workspace / "managed_playlists.json").exists(),
+                        "liked_songs": (data_dir / "liked_songs.json").exists(),
+                        "new_likes": (data_dir / "new_likes.json").exists(),
+                        "playlist_plan": (data_dir / "playlist_plan.json").exists(),
+                        "new_plan": (data_dir / "new_plan.json").exists(),
+                        "missing_matches": (data_dir / "missing_matches.json").exists(),
+                    },
+                    "plan_diagnostics": {
+                        "status": "invalid_plan",
+                        "plan_path": str(plan_path or (data_dir / "playlist_plan.json")),
+                        "liked_path": str(data_dir / "liked_songs.json"),
+                    },
+                    "warnings": [f"stats runtime issue: {exc}"],
+                }
             if json_output:
                 emit_json("ok", "stats", result=result)
             else:

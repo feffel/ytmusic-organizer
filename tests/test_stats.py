@@ -19,6 +19,8 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(result["new_likes_pending"], 0)
             self.assertEqual(result["liked_snapshot_count"], 0)
             self.assertFalse(result["artifact_presence"]["state"])
+            self.assertEqual(result["plan_diagnostics"]["status"], "skipped_missing_plan")
+            self.assertEqual(result["warnings"], [])
 
     def test_run_stats_partial_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -33,6 +35,7 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(result["managed_playlists"], 0)
             self.assertTrue(result["artifact_presence"]["state"])
             self.assertFalse(result["artifact_presence"]["managed_playlists"])
+            self.assertEqual(result["plan_diagnostics"]["status"], "skipped_missing_plan")
 
     def test_run_stats_populated_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -67,6 +70,114 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(result["missing_matches"], 1)
             self.assertEqual(result["new_likes_pending"], 1)
             self.assertEqual(result["liked_snapshot_count"], 2)
+            self.assertEqual(result["plan_diagnostics"]["status"], "skipped_missing_plan")
+
+    def test_run_stats_valid_plan_diagnostics_with_default_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            data_dir = workspace / "data"
+            data_dir.mkdir(parents=True)
+            (data_dir / "liked_songs.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "videoId": "vid-1",
+                            "title": "Song A",
+                            "artists": ["Artist A"],
+                            "album": "",
+                            "duration": "",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "playlist_plan.json").write_text(
+                json.dumps(
+                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_stats(workspace)
+            self.assertEqual(result["plan_diagnostics"]["status"], "ok")
+            self.assertEqual(result["plan_diagnostics"]["matched"], 1)
+            self.assertEqual(result["plan_diagnostics"]["missing"], 0)
+            self.assertEqual(result["plan_diagnostics"]["loose"], 0)
+            self.assertEqual(result["plan_diagnostics"]["ambiguous"], 0)
+
+    def test_run_stats_with_custom_plan_missing_liked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            data_dir = workspace / "data"
+            data_dir.mkdir(parents=True)
+            custom_plan = data_dir / "custom-plan.json"
+            custom_plan.write_text(
+                json.dumps(
+                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_stats(workspace, plan_path=custom_plan)
+            self.assertEqual(result["plan_diagnostics"]["status"], "skipped_missing_liked")
+            self.assertEqual(result["warnings"], [])
+
+    def test_run_stats_invalid_plan_schema_sets_invalid_plan_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            data_dir = workspace / "data"
+            data_dir.mkdir(parents=True)
+            (data_dir / "liked_songs.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "videoId": "vid-1",
+                            "title": "Song A",
+                            "artists": ["Artist A"],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "playlist_plan.json").write_text(json.dumps({"bad": []}), encoding="utf-8")
+
+            result = run_stats(workspace)
+            self.assertEqual(result["plan_diagnostics"]["status"], "invalid_plan")
+            self.assertGreaterEqual(len(result["warnings"]), 1)
+
+    def test_run_stats_invalid_liked_sets_invalid_liked_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            data_dir = workspace / "data"
+            data_dir.mkdir(parents=True)
+            (data_dir / "liked_songs.json").write_text("not json", encoding="utf-8")
+            (data_dir / "playlist_plan.json").write_text(
+                json.dumps(
+                    {"playlists": [{"name": "Chill", "songs": [{"title": "Song A", "artist": "Artist A"}]}]}
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_stats(workspace)
+            self.assertEqual(result["plan_diagnostics"]["status"], "invalid_liked")
+            self.assertGreaterEqual(len(result["warnings"]), 1)
+
+    def test_run_stats_malformed_artifacts_collect_warnings_without_failing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            data_dir = workspace / "data"
+            data_dir.mkdir(parents=True)
+            (workspace / "state.json").write_text("bad json", encoding="utf-8")
+            (workspace / "managed_playlists.json").write_text("bad json", encoding="utf-8")
+            (data_dir / "new_likes.json").write_text("bad json", encoding="utf-8")
+            (data_dir / "missing_matches.json").write_text("bad json", encoding="utf-8")
+
+            result = run_stats(workspace)
+            self.assertEqual(result["processed_likes"], 0)
+            self.assertEqual(result["managed_playlists"], 0)
+            self.assertEqual(result["new_likes_pending"], 0)
+            self.assertEqual(result["missing_matches"], 0)
+            self.assertGreaterEqual(len(result["warnings"]), 4)
 
     def test_cli_stats_json_output_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -91,6 +202,8 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(payload["command"], "stats")
             self.assertIn("processed_likes", payload["result"])
             self.assertIn("artifact_presence", payload["result"])
+            self.assertIn("plan_diagnostics", payload["result"])
+            self.assertIn("warnings", payload["result"])
 
 
 if __name__ == "__main__":

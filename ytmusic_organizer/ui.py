@@ -86,6 +86,8 @@ class WizardUI:
             summary.add_row("Missing matches", str(result.get("missing_matches", 0)))
             summary.add_row("Pending new likes", str(result.get("new_likes_pending", 0)))
             summary.add_row("Liked snapshot count", str(result.get("liked_snapshot_count", 0)))
+            diagnostics = result.get("plan_diagnostics", {})
+            summary.add_row("Plan diagnostics", str(diagnostics.get("status", "n/a")))
             self._console.print(Panel.fit(summary, title="Workspace Metrics", border_style="bright_cyan"))
 
             artifact_presence = result.get("artifact_presence", {})
@@ -107,6 +109,24 @@ class WizardUI:
                 status = "[bold green]present[/bold green]" if present else "[dim]missing[/dim]"
                 artifacts.add_row(key, status)
             self._console.print(Panel.fit(artifacts, title="Artifacts", border_style="bright_blue"))
+
+            if diagnostics.get("status") == "ok":
+                diag_table = Table(show_header=False, box=None, pad_edge=False)
+                diag_table.add_column("Metric", style="bold cyan")
+                diag_table.add_column("Value", style="bold green")
+                diag_table.add_row("Matched", str(diagnostics.get("matched", 0)))
+                diag_table.add_row("Missing", str(diagnostics.get("missing", 0)))
+                diag_table.add_row("Loose", str(diagnostics.get("loose", 0)))
+                diag_table.add_row("Ambiguous", str(diagnostics.get("ambiguous", 0)))
+                self._console.print(Panel.fit(diag_table, title="Plan Diagnostics", border_style="bright_magenta"))
+
+            warnings = result.get("warnings", [])
+            if isinstance(warnings, list) and warnings:
+                warn_table = Table(show_header=False, box=None, pad_edge=False)
+                warn_table.add_column("Warning", style="bold yellow")
+                for warning in warnings:
+                    warn_table.add_row(str(warning))
+                self._console.print(Panel.fit(warn_table, title="Warnings", border_style="yellow"))
             return
 
         use_color = sys.stdout.isatty()
@@ -125,6 +145,8 @@ class WizardUI:
         line("Missing matches", result.get("missing_matches", 0))
         line("Pending new likes", result.get("new_likes_pending", 0))
         line("Liked snapshot count", result.get("liked_snapshot_count", 0))
+        diagnostics = result.get("plan_diagnostics", {})
+        line("Plan diagnostics", diagnostics.get("status", "n/a"))
 
         print()
         print(color("Artifacts", "1;94"))
@@ -143,3 +165,18 @@ class WizardUI:
             present = bool(artifact_presence.get(key, False))
             status = color("present", "32") if present else color("missing", "90")
             print(f"  {color(key + ':', '35')} {status}")
+
+        if diagnostics.get("status") == "ok":
+            print()
+            print(color("Plan Diagnostics", "1;95"))
+            line("Matched", diagnostics.get("matched", 0))
+            line("Missing", diagnostics.get("missing", 0))
+            line("Loose", diagnostics.get("loose", 0))
+            line("Ambiguous", diagnostics.get("ambiguous", 0))
+
+        warnings = result.get("warnings", [])
+        if isinstance(warnings, list) and warnings:
+            print()
+            print(color("Warnings", "1;93"))
+            for warning in warnings:
+                print(f"  {color('-', '33')} {warning}")
