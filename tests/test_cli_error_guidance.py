@@ -1,6 +1,8 @@
 import unittest
+from io import StringIO
+from unittest.mock import patch
 
-from ytmusic_organizer.cli import build_helpful_error
+from ytmusic_organizer.cli import build_helpful_error, main
 
 
 class CliErrorGuidanceTests(unittest.TestCase):
@@ -33,6 +35,46 @@ class CliErrorGuidanceTests(unittest.TestCase):
         msg = build_helpful_error(ValueError("Invalid JSON from stdin: Could not parse JSON"))
         self.assertIn("Plan output is not valid JSON", msg)
         self.assertNotIn("stdin", msg.lower())
+
+    def test_keyboard_interrupt_has_helpful_message(self) -> None:
+        msg = build_helpful_error(KeyboardInterrupt())
+        self.assertIn("Operation cancelled by user", msg)
+        self.assertIn("Re-run the same command", msg)
+
+    def test_main_handles_keyboard_interrupt_without_traceback(self) -> None:
+        capture = StringIO()
+        with (
+            patch("ytmusic_organizer.cli.run_demo", side_effect=KeyboardInterrupt()),
+            patch("sys.stdout", capture),
+            patch("ytmusic_organizer.cli.WizardUI.render_callout") as render_callout,
+        ):
+            code = main(["demo"])
+        self.assertEqual(code, 1)
+        self.assertEqual(render_callout.call_count, 1)
+        args = render_callout.call_args.args
+        self.assertEqual(args[0], "warning")
+        self.assertEqual(args[1], "Operation cancelled")
+        self.assertTrue(capture.getvalue().startswith("\n"))
+
+    def test_setup_interruption_uses_styled_callout(self) -> None:
+        capture = StringIO()
+        with (
+            patch(
+                "ytmusic_organizer.cli.run_setup",
+                side_effect=RuntimeError("Setup was interrupted. Re-run `ytmo setup` to resume."),
+            ),
+            patch("ytmusic_organizer.cli._warn_legacy_root_artifacts"),
+            patch("ytmusic_organizer.cli.WizardUI.command_header"),
+            patch("sys.stdout", capture),
+            patch("ytmusic_organizer.cli.WizardUI.render_callout") as render_callout,
+        ):
+            code = main(["setup"])
+        self.assertEqual(code, 1)
+        self.assertEqual(render_callout.call_count, 1)
+        args = render_callout.call_args.args
+        self.assertEqual(args[0], "warning")
+        self.assertEqual(args[1], "Setup interrupted")
+        self.assertTrue(capture.getvalue().startswith("\n"))
 
 
 if __name__ == "__main__":

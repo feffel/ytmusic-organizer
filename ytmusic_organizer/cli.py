@@ -29,7 +29,15 @@ def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> Non
         )
 
 
-def build_helpful_error(exc: Exception) -> str:
+def build_helpful_error(exc: BaseException) -> str:
+    if isinstance(exc, (KeyboardInterrupt, EOFError)):
+        return (
+            "Operation cancelled by user.\n"
+            "How to continue:\n"
+            "1. Re-run the same command when ready.\n"
+            "2. Use --non-interactive for automation-safe runs where supported."
+        )
+
     text = str(exc)
 
     if text.startswith("AUTH_HEADERS_INVALID::"):
@@ -333,7 +341,9 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "rebuild", result={"message": "Cancelled by user"})
                     else:
-                        ui.render_callout("warning", "Action cancelled", ["No changes were applied."])
+                        ui.render_callout(
+                            "warning", "Action cancelled", ["No changes were applied."]
+                        )
                     return 1
             result = run_full_reset(
                 workspace=workspace,
@@ -396,7 +406,9 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "cleanup", result={"message": "Cancelled by user"})
                     else:
-                        ui.render_callout("warning", "Action cancelled", ["No changes were applied."])
+                        ui.render_callout(
+                            "warning", "Action cancelled", ["No changes were applied."]
+                        )
                     return 1
             result = run_cleanup(
                 workspace=workspace, local_only=args.local_only, dry_run=args.dry_run
@@ -468,9 +480,27 @@ def main(argv: list[str] | None = None) -> int:
 
         parser.error("Unknown command")
         return 2
+    except (KeyboardInterrupt, EOFError) as exc:
+        if json_output:
+            emit_json("error", args.command, error=build_helpful_error(exc))
+        else:
+            print()
+            ui.render_callout(
+                "warning",
+                "Operation cancelled",
+                build_helpful_error(exc).splitlines(),
+            )
+        return 1
     except Exception as exc:
         if json_output:
             emit_json("error", args.command, error=build_helpful_error(exc))
+        elif "Setup was interrupted" in str(exc):
+            print()
+            ui.render_callout(
+                "warning",
+                "Setup interrupted",
+                build_helpful_error(exc).splitlines(),
+            )
         else:
             print(build_helpful_error(exc), file=sys.stderr)
         return 1

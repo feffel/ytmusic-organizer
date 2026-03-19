@@ -21,19 +21,34 @@ except Exception:  # pragma: no cover
 
 
 class WizardUI:
-    _COLOR_TITLE = "bold #e4e8ef"
-    _COLOR_ACCENT = "bold #75e4c5"
-    _COLOR_PATH = "bold #7aa2ff"
-    _COLOR_INFO = "#e4e8ef"
-    _COLOR_SECONDARY = "#c4ccda"
-    _COLOR_WARNING = "bold #ffc46b"
-    _COLOR_ERROR = "bold #ff8a8a"
-    _COLOR_MUTED = "#8f97ab"
-    _BORDER_PRIMARY = "#75e4c5"
-    _BORDER_SECONDARY = "#61697e"
-    _BORDER_INFO = "#4f5566"
-    _BORDER_WARNING = "#ffc46b"
-    _BORDER_ERROR = "#ff8a8a"
+    # Fixed default palette: indigo-vinyl.
+    _COLOR_TITLE = "bold #f6f8ff"
+    _COLOR_ACCENT = "bold #8fb2ff"
+    _COLOR_PATH = "bold #c0d0ff"
+    _COLOR_INFO = "#eef1ff"
+    _COLOR_SECONDARY = "#a9afc8"
+    _COLOR_WARNING = "bold #d8a657"
+    _COLOR_ERROR = "bold #e06c75"
+    _COLOR_MUTED = "#868ead"
+    _BORDER_PRIMARY = "#6f86c7"
+    _BORDER_SECONDARY = "#5f6882"
+    _BORDER_INFO = "#4c5670"
+    _BORDER_WARNING = "#d8a657"
+    _BORDER_ERROR = "#e06c75"
+    _ICON_HEADER = "♪"
+    _ICON_STEP = "▶"
+    _ICON_DONE = "✓"
+    _ICON_DETAIL = "•"
+    _ICON_INFO = "♫"
+    _ICON_WARNING = "!"
+    _ICON_ERROR = "x"
+    _WAVE_FRAMES = ("▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█")
+    _SECTION_ICONS = {
+        "Identity Hero": "♪",
+        "Shape + Momentum": "♬",
+        "Highlights": "♫",
+        "Health Footer": "♩",
+    }
 
     _PLAN_STATUS_LABELS = {
         "ok": "Ready",
@@ -61,9 +76,15 @@ class WizardUI:
         if self._rich_tty:
             time.sleep(seconds)
 
+    def _wave(self) -> str:
+        if self._flow_total <= 0:
+            return self._WAVE_FRAMES[0]
+        index = max(self._flow_index - 1, 0) % len(self._WAVE_FRAMES)
+        return self._WAVE_FRAMES[index]
+
     def _plain_heading(self, text: str) -> None:
         print()
-        print(text)
+        print(f"[stage] {text}")
 
     def _style_paths(self, text: str) -> str:
         if not self._rich_tty:
@@ -79,12 +100,27 @@ class WizardUI:
                 if previous.isalnum() or previous in "._-":
                     return candidate
             trimmed = candidate.rstrip(".,")
-            suffix = candidate[len(trimmed):]
+            suffix = candidate[len(trimmed) :]
             if not trimmed:
                 return candidate
             return f"[{self._COLOR_PATH}]{trimmed}[/]{suffix}"
 
         return self._PATH_PATTERN.sub(replace, text)
+
+    def _style_callout_line(self, line: str) -> str:
+        if not self._rich_tty:
+            return line
+        styled = self._style_paths(line)
+        stripped = line.strip()
+        if not stripped:
+            return styled
+        if stripped.endswith(":"):
+            return f"[bold {self._COLOR_INFO}]{styled}[/]"
+        command_prefixes = ("ytmo ", "python ", "pip ", "make ", "uv ", "pytest ", "ruff ")
+        if stripped.lower().startswith(command_prefixes):
+            indentation = len(line) - len(line.lstrip(" "))
+            return f"{' ' * indentation}[{self._COLOR_PATH}]{stripped}[/]"
+        return styled
 
     def command_header(self, text: str, subtitle: str | None = None) -> None:
         if not self._enabled:
@@ -93,9 +129,9 @@ class WizardUI:
             title_text = self._style_paths(text)
             subtitle_text = self._style_paths(subtitle) if subtitle else None
             header = (
-                title_text
+                f"{self._ICON_HEADER} {title_text}"
                 if not subtitle_text
-                else f"{title_text}\n[{self._COLOR_MUTED}]{subtitle_text}[/]"
+                else f"{self._ICON_HEADER} {title_text}\n[{self._COLOR_MUTED}]{subtitle_text}[/]"
             )
             self._console.print(
                 Panel.fit(
@@ -108,7 +144,7 @@ class WizardUI:
             return
         self._plain_heading(text)
         if subtitle:
-            print(f"  {subtitle}")
+            print(f"  [mix] {subtitle}")
 
     def start_flow(self, steps: list[str] | None = None, title: str | None = None) -> None:
         if not self._enabled:
@@ -118,7 +154,11 @@ class WizardUI:
         if title:
             self.command_header(title)
         if self._flow_total and not self._rich_tty:
-            print(f"Flow: {self._flow_total} steps")
+            print(f"[beat] Flow: {self._flow_total} steps")
+        elif self._flow_total and self._rich_tty:
+            self._console.print(
+                f"[{self._COLOR_MUTED}]  {self._ICON_INFO} queue loaded: {self._flow_total} tracks[/]"
+            )
 
     def start_step(self, text: str) -> None:
         if not self._enabled:
@@ -130,9 +170,12 @@ class WizardUI:
             prefix = "Step"
 
         if self._rich_tty:
-            self._console.print(f"[{self._COLOR_ACCENT}]{prefix}[/] {self._style_paths(text)}")
+            self._console.print(
+                f"[{self._COLOR_ACCENT}]{self._ICON_STEP} {prefix}[/] "
+                f"[{self._COLOR_MUTED}]{self._wave()}[/] {self._style_paths(text)}"
+            )
             return
-        print(f"{prefix} | {text}")
+        print(f"[beat] {prefix} | {text}")
 
     def replay_completed_step(self, text: str) -> None:
         if not self._enabled:
@@ -145,26 +188,33 @@ class WizardUI:
 
         if self._rich_tty:
             self._console.print(
-                f"[{self._COLOR_ACCENT}]{prefix}[/] [{self._COLOR_ACCENT}]done[/] {self._style_paths(text)}"
+                f"[{self._COLOR_ACCENT}]{self._ICON_STEP} {prefix}[/] "
+                f"[{self._COLOR_ACCENT}]{self._ICON_DONE} done[/] "
+                f"[{self._COLOR_MUTED}]{self._wave()}[/] {self._style_paths(text)}"
             )
             return
-        print(f"{prefix} done | {text}")
+        print(f"[drop] {prefix} done | {text}")
 
     def step_detail(self, text: str) -> None:
         if not self._enabled:
             return
         if self._rich_tty:
-            self._console.print(f"[{self._COLOR_MUTED}]  {self._style_paths(text)}[/]")
+            self._console.print(
+                f"[{self._COLOR_MUTED}]  {self._ICON_DETAIL} {self._style_paths(text)}[/]"
+            )
             return
-        print(f"  - {text}")
+        print(f"  [note] {text}")
 
     def finish_step(self, text: str) -> None:
         if not self._enabled:
             return
         if self._rich_tty:
-            self._console.print(f"[{self._COLOR_ACCENT}]done[/] {self._style_paths(text)}")
+            self._console.print(
+                f"[{self._COLOR_ACCENT}]{self._ICON_DONE} done[/] "
+                f"[{self._COLOR_MUTED}]♪[/] {self._style_paths(text)}"
+            )
             return
-        print(f"  done: {text}")
+        print(f"[drop] done: {text}")
 
     def finish_flow(self, text: str) -> None:
         if not self._enabled:
@@ -179,7 +229,7 @@ class WizardUI:
                 )
             )
             return
-        print(f"Flow complete: {text}")
+        print(f"[encore] Flow complete: {text}")
 
     def render_callout(self, level: str, title: str, lines: list[str]) -> None:
         if not self._enabled:
@@ -194,12 +244,18 @@ class WizardUI:
             style = self._COLOR_ERROR
             border = self._BORDER_ERROR
 
+        icon = self._ICON_INFO
+        if level == "warning":
+            icon = self._ICON_WARNING
+        elif level == "error":
+            icon = self._ICON_ERROR
+
         if self._rich_tty:
-            body = "\n".join(self._style_paths(line) for line in lines)
+            body = "\n".join(self._style_callout_line(line) for line in lines)
             self._console.print(
                 Panel.fit(
                     body,
-                    title=self._style_paths(title),
+                    title=self._style_paths(f"{icon} {title}"),
                     border_style=border,
                     style=style,
                     box=ROUNDED,
@@ -209,7 +265,7 @@ class WizardUI:
 
         self._plain_heading(title)
         for line in lines:
-            print(f"  {line}")
+            print(f"  [{level}] {line}")
 
     def render_recap(self, title: str, fields: Mapping[str, Any]) -> None:
         if not self._enabled:
@@ -226,7 +282,7 @@ class WizardUI:
             self._console.print(
                 Panel.fit(
                     table,
-                    title=self._style_paths(title),
+                    title=self._style_paths(f"{self._ICON_INFO} {title}"),
                     border_style=self._BORDER_INFO,
                     box=ROUNDED,
                 )
@@ -340,7 +396,9 @@ class WizardUI:
             return f"{top.get('name', 'Unnamed')} ({top.get('songs', 0)} songs)"
         return "No ranked playlists yet"
 
-    def _stats_diagnostics_line(self, *, missing_artifacts: list[str], warnings: list[str]) -> str | None:
+    def _stats_diagnostics_line(
+        self, *, missing_artifacts: list[str], warnings: list[str]
+    ) -> str | None:
         if not missing_artifacts and not warnings:
             return None
         parts: list[str] = []
@@ -402,7 +460,9 @@ class WizardUI:
             ]
         )
 
-        highlights: list[tuple[str, str, bool]] = [("Top playlist", self._stats_top_playlist_label(top_playlists), False)]
+        highlights: list[tuple[str, str, bool]] = [
+            ("Top playlist", self._stats_top_playlist_label(top_playlists), False)
+        ]
         if pending_likes > 0 or not sparse:
             highlights.append(("New likes pending", str(pending_likes), pending_likes > 0))
         if missing_matches > 0:
@@ -430,7 +490,8 @@ class WizardUI:
         for idx, (heading, metrics) in enumerate(sections):
             if idx:
                 lines.append(separator)
-            lines.append(f"[bold {self._COLOR_INFO}]{heading}[/]")
+            icon = self._SECTION_ICONS.get(heading, self._ICON_INFO)
+            lines.append(f"[bold {self._COLOR_INFO}]{icon} {heading}[/]")
             for label, value, accented in metrics:
                 value_color = self._COLOR_ACCENT if accented else self._COLOR_INFO
                 styled_value = self._style_paths(value)
@@ -460,11 +521,7 @@ class WizardUI:
         liked_snapshot = int(result.get("liked_snapshot_count", 0))
         warnings = [str(item) for item in result.get("warnings", []) if str(item).strip()]
         artifact_presence = result.get("artifact_presence", {})
-        missing_artifacts = [
-            key
-            for key, present in artifact_presence.items()
-            if not bool(present)
-        ]
+        missing_artifacts = [key for key, present in artifact_presence.items() if not bool(present)]
         sparse = (
             identity_score == 0
             and processed_likes == 0
