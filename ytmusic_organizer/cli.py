@@ -13,6 +13,7 @@ from .workflows import run_cleanup, run_demo, run_full_reset, run_setup, run_sta
 
 class _YtmoArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
+        setattr(self, "_ytmo_last_error", message)
         raise argparse.ArgumentError(None, message)
 
 
@@ -182,7 +183,7 @@ def _base_parser(*, exit_on_error: bool = True) -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=True, parser_class=_YtmoArgumentParser)
     subparsers_by_name: dict[str, argparse.ArgumentParser] = {}
 
     def add_workspace_argument(command_parser: argparse.ArgumentParser) -> None:
@@ -280,6 +281,12 @@ def main(argv: list[str] | None = None) -> int:
     except argparse.ArgumentError as exc:
         _emit_scoped_parse_help(parser, raw_argv, str(exc))
         return 2
+    except SystemExit as exc:
+        if exc.code == 2:
+            message = getattr(parser, "_ytmo_last_error", "invalid arguments")
+            _emit_scoped_parse_help(parser, raw_argv, message)
+            return 2
+        raise
 
     workspace = Path(args.workspace).resolve()
     cwd = Path.cwd().resolve()
