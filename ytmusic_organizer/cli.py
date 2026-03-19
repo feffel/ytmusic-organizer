@@ -152,9 +152,7 @@ def _find_subcommand(argv: list[str], subcommands: set[str]) -> str | None:
     return None
 
 
-def _emit_scoped_parse_help(
-    parser: argparse.ArgumentParser, argv: list[str], message: str
-) -> None:
+def _emit_scoped_parse_help(parser: argparse.ArgumentParser, argv: list[str], message: str) -> None:
     print(f"{parser.prog}: error: {message}", file=sys.stderr)
     print(file=sys.stderr)
     subparsers_by_name = getattr(parser, "_ytmo_subparsers", {})
