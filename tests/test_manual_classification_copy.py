@@ -34,7 +34,9 @@ class ManualClassificationCopyTests(unittest.TestCase):
             self.assertIsNotNone(call_args)
             lines = call_args.args[2]
             self.assertTrue(any("Use this prompt with your AI tool." in line for line in lines))
-            self.assertTrue(any("Paste back the full output JSON and press Enter." in line for line in lines))
+            self.assertTrue(
+                any("Paste back the full output JSON and press Enter." in line for line in lines)
+            )
 
     def test_new_plan_manual_callout_mentions_ai_tool_and_full_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -60,7 +62,9 @@ class ManualClassificationCopyTests(unittest.TestCase):
             self.assertIsNotNone(call_args)
             lines = call_args.args[2]
             self.assertTrue(any("Use this prompt with your AI tool." in line for line in lines))
-            self.assertTrue(any("Paste back the full output JSON and press Enter." in line for line in lines))
+            self.assertTrue(
+                any("Paste back the full output JSON and press Enter." in line for line in lines)
+            )
 
 
 if __name__ == "__main__":
