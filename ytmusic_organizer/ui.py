@@ -285,9 +285,7 @@ class WizardUI:
             detail = self._style_paths(text)
             if microcopy:
                 detail = f"{detail}\n    {self._style_paths(microcopy)}"
-            self._console.print(
-                f"[{self._COLOR_MUTED}]  {self._ICON_DETAIL} {detail}[/]"
-            )
+            self._console.print(f"[{self._COLOR_MUTED}]  {self._ICON_DETAIL} {detail}[/]")
             return
         print(f"  [note] {text}")
         if microcopy:
