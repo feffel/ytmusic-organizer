@@ -120,17 +120,19 @@ if [[ -z "${default_branch}" ]]; then
   default_branch="main"
 fi
 
-echo "Fetching ${remote}/${default_branch}..."
-git fetch --quiet "${remote}" "${default_branch}"
+base_ref="refs/ytmo/base/${remote}/${default_branch}"
 
-if ! git merge-base --is-ancestor "${remote}/${default_branch}" "${target_rev}"; then
+echo "Fetching ${remote}/${default_branch}..."
+git fetch --quiet "${remote}" "${default_branch}:${base_ref}"
+
+if ! git merge-base --is-ancestor "${base_ref}" "${target_rev}"; then
   cat <<EOF
-Revision '${target_rev}' is behind ${remote}/${default_branch}.
+Revision '${target_rev}' is behind ${remote}/${default_branch} (${base_ref}).
 Rebase or merge latest ${default_branch} before pushing or opening a PR.
 Suggested command:
-  git fetch ${remote} && git rebase ${remote}/${default_branch}
+  git fetch ${remote} ${default_branch} && git rebase ${remote}/${default_branch}
 EOF
   exit 1
 fi
 
-echo "Revision '${target_rev}' contains latest ${remote}/${default_branch}."
+echo "Revision '${target_rev}' contains latest ${remote}/${default_branch} (${base_ref})."

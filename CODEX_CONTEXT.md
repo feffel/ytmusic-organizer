@@ -211,7 +211,7 @@ Current `Makefile` targets are:
 
 Makefile execution detail:
 - All targets run through `.venv/bin/python` and require `.venv` to exist.
-- `check-venv` guard fails fast with setup instructions if `.venv` is missing.
+- `check-venv` guard fails fast with setup instructions if `.venv` is missing; setup guidance installs editable package with dev extras (`pip install -e .[dev]`) so `ruff`/`pre-commit` targets work.
 
 Documentation split:
 - `README.md` is intentionally short and optimized for discoverability + first run.
@@ -235,6 +235,7 @@ CI automation:
 Local quality gates:
 - `.pre-commit-config.yaml` includes `pre-push` hooks that enforce branch freshness (`scripts/git/ensure-up-to-date-base.sh`) and run `make verify`.
 - `scripts/git/ensure-up-to-date-base.sh` validates the pushed revision (`PRE_COMMIT_TO_REF` when available, otherwise `HEAD`) against the default branch of a resolved base remote (prefers `upstream`, then branch upstream remote, then push remote, then `origin`).
+- `scripts/git/ensure-up-to-date-base.sh` fetches base via an explicit local ref (`refs/ytmo/base/<remote>/<branch>`) before `merge-base`, avoiding false failures in single-branch/narrow-fetch clones where `refs/remotes/<remote>/<branch>` may be absent.
 - Install with `make hooks-install`.
 
 # Data Flow

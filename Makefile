@@ -3,7 +3,7 @@
 VENV_PYTHON := .venv/bin/python
 
 check-venv:
-	@test -x $(VENV_PYTHON) || (echo "Error: .venv not found. Create it with: python -m venv .venv && . .venv/bin/activate && pip install -e ." && exit 1)
+	@test -x $(VENV_PYTHON) || (echo "Error: .venv not found. Create it with: python -m venv .venv && . .venv/bin/activate && pip install -e .[dev]" && exit 1)
 
 setup: check-venv
 	$(VENV_PYTHON) -m ytmusic_organizer.cli setup
