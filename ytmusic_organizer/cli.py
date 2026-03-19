@@ -333,7 +333,9 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "rebuild", result={"message": "Cancelled by user"})
                     else:
-                        ui.render_callout("warning", "Action cancelled", ["No changes were applied."])
+                        ui.render_callout(
+                            "warning", "Action cancelled", ["No changes were applied."]
+                        )
                     return 1
             result = run_full_reset(
                 workspace=workspace,
@@ -396,7 +398,9 @@ def main(argv: list[str] | None = None) -> int:
                     if json_output:
                         emit_json("cancelled", "cleanup", result={"message": "Cancelled by user"})
                     else:
-                        ui.render_callout("warning", "Action cancelled", ["No changes were applied."])
+                        ui.render_callout(
+                            "warning", "Action cancelled", ["No changes were applied."]
+                        )
                     return 1
             result = run_cleanup(
                 workspace=workspace, local_only=args.local_only, dry_run=args.dry_run

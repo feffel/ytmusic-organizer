@@ -79,7 +79,7 @@ class WizardUI:
                 if previous.isalnum() or previous in "._-":
                     return candidate
             trimmed = candidate.rstrip(".,")
-            suffix = candidate[len(trimmed):]
+            suffix = candidate[len(trimmed) :]
             if not trimmed:
                 return candidate
             return f"[{self._COLOR_PATH}]{trimmed}[/]{suffix}"
@@ -340,7 +340,9 @@ class WizardUI:
             return f"{top.get('name', 'Unnamed')} ({top.get('songs', 0)} songs)"
         return "No ranked playlists yet"
 
-    def _stats_diagnostics_line(self, *, missing_artifacts: list[str], warnings: list[str]) -> str | None:
+    def _stats_diagnostics_line(
+        self, *, missing_artifacts: list[str], warnings: list[str]
+    ) -> str | None:
         if not missing_artifacts and not warnings:
             return None
         parts: list[str] = []
@@ -402,7 +404,9 @@ class WizardUI:
             ]
         )
 
-        highlights: list[tuple[str, str, bool]] = [("Top playlist", self._stats_top_playlist_label(top_playlists), False)]
+        highlights: list[tuple[str, str, bool]] = [
+            ("Top playlist", self._stats_top_playlist_label(top_playlists), False)
+        ]
         if pending_likes > 0 or not sparse:
             highlights.append(("New likes pending", str(pending_likes), pending_likes > 0))
         if missing_matches > 0:
@@ -460,11 +464,7 @@ class WizardUI:
         liked_snapshot = int(result.get("liked_snapshot_count", 0))
         warnings = [str(item) for item in result.get("warnings", []) if str(item).strip()]
         artifact_presence = result.get("artifact_presence", {})
-        missing_artifacts = [
-            key
-            for key, present in artifact_presence.items()
-            if not bool(present)
-        ]
+        missing_artifacts = [key for key, present in artifact_presence.items() if not bool(present)]
         sparse = (
             identity_score == 0
             and processed_likes == 0

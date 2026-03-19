@@ -32,7 +32,9 @@ class ConfigAndBootstrapTests(unittest.TestCase):
         with (
             patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
             patch("ytmusic_organizer.workflows.export_liked", side_effect=fake_export_liked),
-            patch("ytmusic_organizer.workflows._obtain_full_plan", side_effect=fake_obtain_full_plan),
+            patch(
+                "ytmusic_organizer.workflows._obtain_full_plan", side_effect=fake_obtain_full_plan
+            ),
             patch(
                 "ytmusic_organizer.workflows.update_managed_playlists",
                 side_effect=fake_update_managed_playlists,
@@ -41,7 +43,9 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                 "ytmusic_organizer.workflows.apply_plan",
                 return_value={"results": [], "missing": 0},
             ),
-            patch("ytmusic_organizer.workflows.initialize_state", side_effect=fake_initialize_state),
+            patch(
+                "ytmusic_organizer.workflows.initialize_state", side_effect=fake_initialize_state
+            ),
         ):
             yield
 
@@ -233,7 +237,9 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                     interactive=False,
                 )
 
-            with patch("builtins.input", side_effect=AssertionError("input() should not be called")):
+            with patch(
+                "builtins.input", side_effect=AssertionError("input() should not be called")
+            ):
                 with self._setup_mocks():
                     run_setup(
                         workspace=workspace,
