@@ -227,6 +227,7 @@ Release automation:
 
 CI automation:
 - `.github/workflows/ci.yml` runs lint (`ruff`, `pre-commit`), tests (3.11/3.12/3.13), package build + `twine check`, `pipx` CLI smoke checks, and repo media guards.
+- `.github/workflows/ci.yml` triggers on pull requests and on pushes to `main` only (avoids duplicate feature-branch push + PR runs).
 - CI uses `uv` for Python dependency installation and includes workflow concurrency cancellation.
 - `.github/workflows/dependency-review.yml` runs dependency risk checks on pull requests.
 - `.github/dependabot.yml` keeps pip and GitHub Actions dependencies updated weekly.
