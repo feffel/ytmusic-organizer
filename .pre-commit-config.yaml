@@ -11,3 +11,21 @@ repos:
     hooks:
       - id: ruff
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: ensure-up-to-date-base
+        name: Ensure branch includes latest default branch
+        entry: ./scripts/git/ensure-up-to-date-base.sh origin
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: verify-before-push
+        name: Verify lint and tests before push
+        entry: make verify
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

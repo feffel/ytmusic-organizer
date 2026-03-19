@@ -1,6 +1,7 @@
-.PHONY: check-venv setup sync rebuild cleanup stats test demo-record demo-render demo-check launch-generate
+.PHONY: check-venv setup sync rebuild cleanup stats test verify verify-base pr-ready hooks-install demo-record demo-render demo-check launch-generate
 
 VENV_PYTHON := .venv/bin/python
+DEFAULT_REMOTE := origin
 
 check-venv:
 	@test -x $(VENV_PYTHON) || (echo "Error: .venv not found. Create it with: python -m venv .venv && . .venv/bin/activate && pip install -e ." && exit 1)
@@ -22,6 +23,19 @@ stats: check-venv
 
 test: check-venv
 	$(VENV_PYTHON) -m unittest discover -s tests -v
+
+verify: check-venv
+	$(VENV_PYTHON) -m ruff check .
+	$(VENV_PYTHON) -m ruff format --check .
+	$(VENV_PYTHON) -m unittest discover -s tests -v
+
+verify-base:
+	./scripts/git/ensure-up-to-date-base.sh $(DEFAULT_REMOTE)
+
+pr-ready: verify-base verify
+
+hooks-install: check-venv
+	$(VENV_PYTHON) -m pre_commit install --hook-type pre-commit --hook-type pre-push
 
 demo-record:
 	./scripts/demo/record.sh

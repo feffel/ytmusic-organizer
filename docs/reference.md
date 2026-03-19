@@ -71,11 +71,15 @@ Primary artifacts:
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
-python -m unittest discover -s tests -v
-ruff check .
-ruff format --check .
-pre-commit run --all-files
+make hooks-install
+make verify
+make pr-ready
 ```
+
+Notes:
+- `make verify` runs `ruff check`, `ruff format --check`, and unit tests.
+- `make pr-ready` verifies branch ancestry against latest `origin/main` then runs full `verify`.
+- `make hooks-install` installs both `pre-commit` and `pre-push` hooks.
 
 ## Release and Automation
 

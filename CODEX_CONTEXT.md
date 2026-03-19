@@ -179,12 +179,17 @@ Demo capture/render/validation helpers. Outputs go to `artifacts/demo/` and are 
 - `scripts/launch/generate.sh`
 Generates launch input bundle (`project-metadata.json`, `CHANGELOG.md`, `stats.json`) in `artifacts/launch/<timestamp>/` for private launch orchestration.
 
+- `scripts/git/ensure-up-to-date-base.sh`
+Git ancestry guard used before PR/push workflows. Fetches remote default branch (fallback: `main`) and fails if current `HEAD` does not contain it.
+
 # Shell Workflows
-No dedicated shell wrapper scripts are used.
+One dedicated git guard script is used for branch freshness checks:
+- `scripts/git/ensure-up-to-date-base.sh`
 
 Canonical execution paths:
 1. Direct CLI via `ytmo ...` (or `python -m ytmusic_organizer.cli ...`).
 2. `make` targets that delegate to the CLI.
+3. `make` verification targets for pre-push/PR readiness gates.
 
 # Make Targets
 Current `Makefile` targets are:
@@ -195,6 +200,10 @@ Current `Makefile` targets are:
 - `ytmo demo` -> simulation-only setup walkthrough (`--mode manual|api`), no remote/local side effects
 - `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
+- `make verify` -> run lint (`ruff check`), format check (`ruff format --check`), and unit tests
+- `make verify-base` -> fail if branch does not include latest remote default branch
+- `make pr-ready` -> run `verify-base` then `verify`
+- `make hooks-install` -> install local `pre-commit` and `pre-push` hooks
 - `make demo-record` -> record CLI demo cast to ignored artifacts
 - `make demo-render` -> render demo gif/mp4 from cast
 - `make demo-check` -> fail when `.cast/.gif/.mp4` files are tracked in git
@@ -221,6 +230,10 @@ CI automation:
 - CI uses `uv` for Python dependency installation and includes workflow concurrency cancellation.
 - `.github/workflows/dependency-review.yml` runs dependency risk checks on pull requests.
 - `.github/dependabot.yml` keeps pip and GitHub Actions dependencies updated weekly.
+
+Local quality gates:
+- `.pre-commit-config.yaml` includes `pre-push` hooks that enforce branch freshness (`scripts/git/ensure-up-to-date-base.sh origin`) and run `make verify`.
+- Install with `make hooks-install`.
 
 # Data Flow
 ## `data/liked_songs.json`
