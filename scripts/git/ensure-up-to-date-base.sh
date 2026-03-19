@@ -2,21 +2,98 @@
 set -euo pipefail
 
 remote="${1:-}"
+target_rev_arg="${2:-}"
 
-if [[ -z "${remote}" && -n "${PRE_COMMIT_REMOTE_NAME:-}" ]]; then
-  remote="${PRE_COMMIT_REMOTE_NAME}"
-fi
+resolve_remote() {
+  local candidate=""
+  local branch_name=""
+  local upstream_ref=""
+  local upstream_remote=""
 
-if [[ -z "${remote}" ]]; then
-  upstream_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
-  if [[ -n "${upstream_ref}" && "${upstream_ref}" == */* ]]; then
-    remote="${upstream_ref%%/*}"
+  if [[ -n "${remote}" ]]; then
+    echo "${remote}"
+    return 0
   fi
+
+  if [[ -n "${YTMO_BASE_REMOTE:-}" ]]; then
+    echo "${YTMO_BASE_REMOTE}"
+    return 0
+  fi
+
+  # In fork workflows, canonical base is usually "upstream".
+  if git remote get-url upstream >/dev/null 2>&1; then
+    echo "upstream"
+    return 0
+  fi
+
+  branch_name="$(git branch --show-current)"
+  if [[ -n "${branch_name}" ]]; then
+    upstream_ref="$(git for-each-ref --format='%(upstream:short)' "refs/heads/${branch_name}" 2>/dev/null || true)"
+    if [[ -n "${upstream_ref}" && "${upstream_ref}" == */* ]]; then
+      upstream_remote="${upstream_ref%%/*}"
+      if [[ -n "${upstream_remote}" ]]; then
+        echo "${upstream_remote}"
+        return 0
+      fi
+    fi
+  fi
+
+  if [[ -n "${PRE_COMMIT_REMOTE_NAME:-}" ]]; then
+    echo "${PRE_COMMIT_REMOTE_NAME}"
+    return 0
+  fi
+
+  if git remote get-url origin >/dev/null 2>&1; then
+    echo "origin"
+    return 0
+  fi
+
+  candidate="$(git remote | head -n 1 || true)"
+  if [[ -n "${candidate}" ]]; then
+    echo "${candidate}"
+    return 0
+  fi
+
+  return 1
+}
+
+resolve_target_rev() {
+  local candidate=""
+
+  if [[ -n "${target_rev_arg}" ]]; then
+    if git rev-parse --verify --quiet "${target_rev_arg}^{commit}" >/dev/null; then
+      echo "${target_rev_arg}"
+      return 0
+    fi
+    echo "Unable to resolve target revision '${target_rev_arg}'." >&2
+    return 1
+  fi
+
+  if [[ -n "${PRE_COMMIT_TO_REF:-}" ]]; then
+    if git rev-parse --verify --quiet "${PRE_COMMIT_TO_REF}^{commit}" >/dev/null; then
+      echo "${PRE_COMMIT_TO_REF}"
+      return 0
+    fi
+    echo "Unable to resolve PRE_COMMIT_TO_REF='${PRE_COMMIT_TO_REF}' to a local commit." >&2
+    return 1
+  fi
+
+  echo "HEAD"
+}
+
+if ! remote="$(resolve_remote)"; then
+  remotes="$(git remote | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  cat <<EOF
+Unable to resolve git remote for base freshness check.
+Provide one explicitly:
+  ./scripts/git/ensure-up-to-date-base.sh <remote> [target-rev]
+Available remotes: ${remotes:-<none>}
+EOF
+  exit 1
 fi
 
-if [[ -z "${remote}" ]]; then
-  remote="origin"
-fi
+target_rev="$(resolve_target_rev)"
+
 
 if ! git remote get-url "${remote}" >/dev/null 2>&1; then
   remotes="$(git remote | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
@@ -46,9 +123,9 @@ fi
 echo "Fetching ${remote}/${default_branch}..."
 git fetch --quiet "${remote}" "${default_branch}"
 
-if ! git merge-base --is-ancestor "${remote}/${default_branch}" HEAD; then
+if ! git merge-base --is-ancestor "${remote}/${default_branch}" "${target_rev}"; then
   cat <<EOF
-Branch is behind ${remote}/${default_branch}.
+Revision '${target_rev}' is behind ${remote}/${default_branch}.
 Rebase or merge latest ${default_branch} before pushing or opening a PR.
 Suggested command:
   git fetch ${remote} && git rebase ${remote}/${default_branch}
@@ -56,4 +133,4 @@ EOF
   exit 1
 fi
 
-echo "Branch contains latest ${remote}/${default_branch}."
+echo "Revision '${target_rev}' contains latest ${remote}/${default_branch}."

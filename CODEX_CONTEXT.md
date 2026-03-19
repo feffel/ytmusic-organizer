@@ -234,6 +234,7 @@ CI automation:
 
 Local quality gates:
 - `.pre-commit-config.yaml` includes `pre-push` hooks that enforce branch freshness (`scripts/git/ensure-up-to-date-base.sh`) and run `make verify`.
+- `scripts/git/ensure-up-to-date-base.sh` validates the pushed revision (`PRE_COMMIT_TO_REF` when available, otherwise `HEAD`) against the default branch of a resolved base remote (prefers `upstream`, then branch upstream remote, then push remote, then `origin`).
 - Install with `make hooks-install`.
 
 # Data Flow
