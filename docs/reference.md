@@ -78,7 +78,7 @@ make pr-ready
 
 Notes:
 - `make verify` runs `ruff check`, `ruff format --check`, and unit tests.
-- `make pr-ready` verifies branch ancestry against the latest default branch on the resolved base remote (explicit arg/env -> `upstream` -> branch upstream remote -> push remote -> `origin`) then runs full `verify`.
+- `make pr-ready` is an alias of `make verify` for PR readiness checks.
 - `make hooks-install` installs both `pre-commit` and `pre-push` hooks.
 
 ## Release and Automation

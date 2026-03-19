@@ -1,4 +1,4 @@
-.PHONY: check-venv setup sync rebuild cleanup stats test verify verify-base pr-ready hooks-install demo-record demo-render demo-check launch-generate
+.PHONY: check-venv setup sync rebuild cleanup stats test verify pr-ready hooks-install demo-record demo-render demo-check launch-generate
 
 VENV_PYTHON := .venv/bin/python
 
@@ -28,10 +28,7 @@ verify: check-venv
 	$(VENV_PYTHON) -m ruff format --check .
 	$(VENV_PYTHON) -m unittest discover -s tests -v
 
-verify-base:
-	./scripts/git/ensure-up-to-date-base.sh
-
-pr-ready: verify-base verify
+pr-ready: verify
 
 hooks-install: check-venv
 	$(VENV_PYTHON) -m pre_commit install --hook-type pre-commit --hook-type pre-push

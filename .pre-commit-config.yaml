@@ -14,14 +14,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: ensure-up-to-date-base
-        name: Ensure branch includes latest default branch
-        entry: ./scripts/git/ensure-up-to-date-base.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
       - id: verify-before-push
         name: Verify lint and tests before push
         entry: make verify

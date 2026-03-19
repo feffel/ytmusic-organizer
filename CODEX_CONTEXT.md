@@ -179,17 +179,11 @@ Demo capture/render/validation helpers. Outputs go to `artifacts/demo/` and are 
 - `scripts/launch/generate.sh`
 Generates launch input bundle (`project-metadata.json`, `CHANGELOG.md`, `stats.json`) in `artifacts/launch/<timestamp>/` for private launch orchestration.
 
-- `scripts/git/ensure-up-to-date-base.sh`
-Git ancestry guard used before PR/push workflows. Fetches remote default branch (fallback: `main`) and fails if current `HEAD` does not contain it.
-
 # Shell Workflows
-One dedicated git guard script is used for branch freshness checks:
-- `scripts/git/ensure-up-to-date-base.sh`
-
 Canonical execution paths:
 1. Direct CLI via `ytmo ...` (or `python -m ytmusic_organizer.cli ...`).
 2. `make` targets that delegate to the CLI.
-3. `make` verification targets for pre-push/PR readiness gates.
+3. `make` verification targets for pre-push/PR readiness.
 
 # Make Targets
 Current `Makefile` targets are:
@@ -201,8 +195,7 @@ Current `Makefile` targets are:
 - `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
 - `make verify` -> run lint (`ruff check`), format check (`ruff format --check`), and unit tests
-- `make verify-base` -> fail if branch does not include latest remote default branch
-- `make pr-ready` -> run `verify-base` then `verify`
+- `make pr-ready` -> alias of `make verify` for PR readiness checks
 - `make hooks-install` -> install local `pre-commit` and `pre-push` hooks
 - `make demo-record` -> record CLI demo cast to ignored artifacts
 - `make demo-render` -> render demo gif/mp4 from cast
@@ -233,9 +226,7 @@ CI automation:
 - `.github/dependabot.yml` keeps pip and GitHub Actions dependencies updated weekly.
 
 Local quality gates:
-- `.pre-commit-config.yaml` includes `pre-push` hooks that enforce branch freshness (`scripts/git/ensure-up-to-date-base.sh`) and run `make verify`.
-- `scripts/git/ensure-up-to-date-base.sh` validates the pushed revision (`PRE_COMMIT_TO_REF` when available, otherwise `HEAD`) against the default branch of a resolved base remote (prefers `upstream`, then branch upstream remote, then push remote, then `origin`).
-- `scripts/git/ensure-up-to-date-base.sh` fetches base via an explicit local ref (`refs/ytmo/base/<remote>/<branch>`) before `merge-base`, avoiding false failures in single-branch/narrow-fetch clones where `refs/remotes/<remote>/<branch>` may be absent.
+- `.pre-commit-config.yaml` includes a `pre-push` hook that runs `make verify`.
 - Install with `make hooks-install`.
 
 # Data Flow
