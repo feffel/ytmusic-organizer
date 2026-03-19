@@ -25,7 +25,13 @@ class UISurfaceTests(unittest.TestCase):
                 "new_plan": True,
                 "missing_matches": True,
             },
-            "plan_diagnostics": {"status": "ok", "matched": 60, "missing": 3, "loose": 2, "ambiguous": 1},
+            "plan_diagnostics": {
+                "status": "ok",
+                "matched": 60,
+                "missing": 3,
+                "loose": 2,
+                "ambiguous": 1,
+            },
             "insights": {
                 "identity_score": 92,
                 "plan_playlists": 7,
