@@ -164,6 +164,41 @@ class UISurfaceTests(unittest.TestCase):
             recap_table = recap_panel.renderable
             self.assertIn(f"[{ui._COLOR_PATH}]/tmp/ws[/]", recap_table.columns[1]._cells[0])
 
+    def test_rich_callout_emphasizes_suggested_command_lines(self) -> None:
+        with patch("ytmusic_organizer.ui.Console") as console_cls:
+            console = console_cls.return_value
+            ui = WizardUI(enabled=True, force_tty=True)
+            ui.render_callout(
+                "warning",
+                "Setup interrupted",
+                [
+                    "How to fix:",
+                    "1. Re-run setup:",
+                    "   ytmo setup",
+                ],
+            )
+            callout_panel = console.print.call_args_list[-1].args[0]
+            self.assertIn(f"[{ui._COLOR_PATH}]ytmo setup[/]", callout_panel.renderable)
+
+    def test_plain_callout_preserves_raw_command_lines(self) -> None:
+        capture = io.StringIO()
+        with patch("sys.stdout", capture):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.render_callout(
+                "warning",
+                "Setup interrupted",
+                [
+                    "How to fix:",
+                    "1. Re-run setup:",
+                    "   ytmo setup",
+                ],
+            )
+        output = capture.getvalue()
+        self.assertIn("  How to fix:", output)
+        self.assertIn("  1. Re-run setup:", output)
+        self.assertIn("     ytmo setup", output)
+        self.assertNotIn("[warning]    ytmo setup", output)
+
     def test_show_stats_treats_identity_zero_as_sparse_even_with_liked_snapshot(self) -> None:
         sparse = self._sample_result()
         sparse.update(
@@ -203,6 +238,23 @@ class UISurfaceTests(unittest.TestCase):
         self.assertNotIn("Managed playlists: 0", output)
         self.assertNotIn("Processed likes: 0", output)
         self.assertNotIn("New likes pending: 0", output)
+
+    def test_plain_mode_flow_markers_use_neon_stage_tags(self) -> None:
+        capture = io.StringIO()
+        with patch("sys.stdout", capture):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.command_header("ytmusic-organizer sync", "incremental update")
+            ui.start_step("Export new likes")
+            ui.step_detail("Scanning source workspace")
+            ui.finish_step("Detected 2 new likes")
+            ui.finish_flow("Sync completed")
+
+        output = capture.getvalue()
+        self.assertIn("[stage] ytmusic-organizer sync", output)
+        self.assertIn("[beat] Step | Export new likes", output)
+        self.assertIn("[note] Scanning source workspace", output)
+        self.assertIn("[drop] done: Detected 2 new likes", output)
+        self.assertIn("[encore] Flow complete: Sync completed", output)
 
 
 if __name__ == "__main__":

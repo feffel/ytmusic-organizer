@@ -222,6 +222,20 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                 str(ctx.exception),
             )
 
+    def test_setup_mode_prompt_interrupt_uses_resume_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            with patch("builtins.input", side_effect=KeyboardInterrupt()):
+                with self.assertRaises(RuntimeError) as ctx:
+                    run_setup(
+                        workspace=workspace,
+                        auth_file=None,
+                        mode=None,
+                        interactive=True,
+                    )
+        self.assertIn("Setup was interrupted", str(ctx.exception))
+
     def test_setup_resume_replays_completed_steps_with_numbered_done_entries(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / ".ytmo"

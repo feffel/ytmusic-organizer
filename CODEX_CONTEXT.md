@@ -162,7 +162,7 @@ Command parsing and user-facing flow control.
 Supports optional JSON output mode (`--json`) for automation and command recaps/callouts for human output.
 
 - `ytmusic_organizer/ui.py`
-TTY-first flow renderer. Provides guided stepper surfaces for command workflows, modern recap/callout cards, dry-run preview cards, and a single-canvas staged stats renderer for interactive terminals. Rich/TTY output also applies dedicated path accent styling for filesystem paths across step/detail/callout/recap surfaces.
+TTY-first flow renderer. Provides guided stepper surfaces for command workflows, modern recap/callout cards, dry-run preview cards, and a single-canvas staged stats renderer for interactive terminals. Rich/TTY output also applies dedicated path accent styling for filesystem paths across step/detail/callout/recap surfaces. UI now uses a softened Neon Stage visual theme (cool cyan-led accents for non-error surfaces, red reserved for actual errors, music-flavored icons/waveform cues in rich mode, and deterministic plain-text tags like `[stage]`, `[beat]`, `[drop]`, `[encore]` in non-TTY mode).
 
 - `ytmusic_organizer/matching.py`
 Title/artist normalization and matching heuristics.
@@ -261,6 +261,15 @@ CI automation:
 - Interactive manual plan input no longer depends on EOF signals; it accepts line-based paste, auto-submits once JSON parses, and allows blank-line submit for raw/fenced retries.
 - Manual classification callouts now explicitly instruct users to run the generated prompt in their AI tool and paste back the full output JSON.
 - Human-facing CLI output uses a TTY-first renderer with guided stepper progress for setup/sync/rebuild/demo, recap cards for command completion, and callout-style confirmations.
+- Human-facing CLI output follows the Neon Stage theme across surfaces while remaining pure CLI (no full-screen TUI): rich mode uses icon-accented lines/cards plus waveform/queue cues and stats-section music markers, while plain mode uses stable ASCII tags so logs stay script-friendly.
+- UI theming is now fixed to the `indigo-vinyl` palette by default (no runtime theme knob), keeping contrast stable and avoiding color-state ambiguity across terminals.
+- Top-level CLI interruption handling is traceback-safe: `KeyboardInterrupt`/`EOFError` return user-facing guidance instead of uncaught tracebacks.
+- Setup interruption guidance is rendered as a styled warning callout (`Setup interrupted`) in human mode, while JSON mode keeps machine-readable error payloads.
+- All human-mode command interruptions now use styled warning callouts (`Operation cancelled`) with a forced leading newline so shell `^C` echoes do not collide with callout content.
+- Setup interruption callout rendering now prints a leading newline before the panel so shell `^C` echoes do not collide with the callout title.
+- Rich callouts now apply line-level emphasis: heading lines (ending with `:`) are bolded and suggested command lines (for example `ytmo ...`) are highlighted with the command accent color for faster scanning.
+- Non-TTY/plain callouts preserve raw body lines (no `[warning]/[info]` prefixes), so suggested shell commands remain copy/paste-safe in redirected output and logs.
+- Interactive setup mode-selection prompt interruption (Ctrl-C/Ctrl-D) now raises the same setup-specific resume guidance (`Setup was interrupted...`) as later setup steps.
 - Resumable setup now replays previously completed setup steps as numbered `Step n/6 done ...` entries so resumed runs keep accurate step index progression instead of muted `Resuming:` notes.
 - Interactive resumed setup no longer re-prompts for default classification mode when no `--mode` override is passed; it reuses persisted `classification_mode`.
 - Interactive TTY stats output is diagnostics-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (overview), 0.18s (plan/coverage), 0.18s (queue/gaps), 0.12s (health), then frame lock.

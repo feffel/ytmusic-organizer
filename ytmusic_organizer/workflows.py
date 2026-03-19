@@ -513,7 +513,11 @@ def run_setup(
                     "api: fastest flow with automatic plan generation, but requires OPENAI_API_KEY and API cost.",
                 ],
             )
-        choice = input("Default mode [manual/api] (manual): ").strip().lower()
+        try:
+            choice = input("Default mode [manual/api] (manual): ").strip().lower()
+        except (KeyboardInterrupt, EOFError) as exc:
+            state.mark_error("setup interrupted by user")
+            raise RuntimeError("Setup was interrupted. Re-run `ytmo setup` to resume.") from exc
         if choice in {"manual", "api"}:
             config.classification_mode = choice
 
