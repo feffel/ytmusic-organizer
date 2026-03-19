@@ -9,6 +9,67 @@ from ytmusic_organizer import __version__
 
 
 class CliSmokeTests(unittest.TestCase):
+    def test_no_command_shows_top_level_help_on_error(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("error: the following arguments are required: command", result.stderr)
+        self.assertIn("Most common commands:", result.stderr)
+        self.assertIn("{setup,sync,rebuild,cleanup,demo,stats}", result.stderr)
+
+    def test_top_level_unrecognized_arg_shows_top_level_help(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "-q"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("error:", result.stderr)
+        self.assertIn("Most common commands:", result.stderr)
+        self.assertIn("{setup,sync,rebuild,cleanup,demo,stats}", result.stderr)
+
+    def test_subcommand_unrecognized_arg_shows_subcommand_help(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "setup", "-q"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("error: unrecognized arguments: -q", result.stderr)
+        self.assertIn("usage: ytmo setup", result.stderr)
+        self.assertIn("--auth-file", result.stderr)
+        self.assertIn("--restart", result.stderr)
+
+    def test_setup_invalid_mode_shows_setup_help(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "setup", "--mode", "foo"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("error: argument --mode: invalid choice: 'foo'", result.stderr)
+        self.assertIn("usage: ytmo setup", result.stderr)
+        self.assertIn("--mode {manual,api}", result.stderr)
+
+    def test_demo_invalid_mode_shows_demo_help(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "demo", "--mode", "auto"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("error: argument --mode: invalid choice: 'auto'", result.stderr)
+        self.assertIn("usage: ytmo demo", result.stderr)
+        self.assertIn("--mode {manual,api}", result.stderr)
+
     def test_help_runs(self) -> None:
         result = subprocess.run(
             [sys.executable, "-m", "ytmusic_organizer.cli", "--help"],

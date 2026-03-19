@@ -11,6 +11,12 @@ from .ui import WizardUI
 from .workflows import run_cleanup, run_demo, run_full_reset, run_setup, run_stats, run_weekly_sync
 
 
+class _YtmoArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        setattr(self, "_ytmo_last_error", message)
+        raise argparse.ArgumentError(None, message)
+
+
 def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> None:
     if workspace == cwd:
         return
@@ -140,11 +146,33 @@ def build_helpful_error(exc: BaseException) -> str:
     return f"Error: {text}"
 
 
-def _base_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+def _find_subcommand(argv: list[str], subcommands: set[str]) -> str | None:
+    for token in argv:
+        if token == "--":
+            break
+        if token in subcommands:
+            return token
+        if token.startswith("-"):
+            continue
+        return None
+    return None
+
+
+def _emit_scoped_parse_help(parser: argparse.ArgumentParser, argv: list[str], message: str) -> None:
+    print(f"{parser.prog}: error: {message}", file=sys.stderr)
+    print(file=sys.stderr)
+    subparsers_by_name = getattr(parser, "_ytmo_subparsers", {})
+    subcommand = _find_subcommand(argv, set(subparsers_by_name))
+    target = subparsers_by_name.get(subcommand, parser)
+    target.print_help(sys.stderr)
+
+
+def _base_parser(*, exit_on_error: bool = True) -> argparse.ArgumentParser:
+    parser = _YtmoArgumentParser(
         prog="ytmo",
         description=f"YouTube Music Organizer CLI (v{__version__})",
         formatter_class=argparse.RawTextHelpFormatter,
+        exit_on_error=exit_on_error,
         epilog=(
             "Most common commands:\n"
             "  ytmo setup\n"
@@ -155,7 +183,8 @@ def _base_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=True, parser_class=_YtmoArgumentParser)
+    subparsers_by_name: dict[str, argparse.ArgumentParser] = {}
 
     def add_workspace_argument(command_parser: argparse.ArgumentParser) -> None:
         default_path = str(default_workspace())
@@ -190,6 +219,7 @@ def _base_parser() -> argparse.ArgumentParser:
     p_setup.add_argument(
         "--restart", action="store_true", help="Reset setup progress and start from scratch"
     )
+    subparsers_by_name["setup"] = p_setup
 
     p_sync = sub.add_parser("sync", help="Apply incremental liked-song updates")
     add_workspace_argument(p_sync)
@@ -197,6 +227,7 @@ def _base_parser() -> argparse.ArgumentParser:
     add_dry_run_argument(p_sync)
     p_sync.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_sync.add_argument("--non-interactive", action="store_true", help="Disable prompts")
+    subparsers_by_name["sync"] = p_sync
 
     p_rebuild = sub.add_parser("rebuild", help="Delete managed playlists and rebuild")
     add_workspace_argument(p_rebuild)
@@ -205,6 +236,7 @@ def _base_parser() -> argparse.ArgumentParser:
     p_rebuild.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p_rebuild.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_rebuild.add_argument("--non-interactive", action="store_true", help="Disable prompts")
+    subparsers_by_name["rebuild"] = p_rebuild
 
     p_cleanup = sub.add_parser(
         "cleanup", help="Delete playlists managed by this tool and local managed artifacts"
@@ -218,6 +250,7 @@ def _base_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Only remove local artifacts, keep remote playlists",
     )
+    subparsers_by_name["cleanup"] = p_cleanup
 
     p_demo = sub.add_parser(
         "demo", help="Live setup walkthrough simulation (no auth/download/write)"
@@ -226,6 +259,7 @@ def _base_parser() -> argparse.ArgumentParser:
     p_demo.add_argument(
         "--mode", choices=["manual", "api"], default="manual", help="Simulated classification mode"
     )
+    subparsers_by_name["demo"] = p_demo
 
     p_stats = sub.add_parser("stats", help="Show local workspace stats and non-failing diagnostics")
     add_workspace_argument(p_stats)
@@ -233,13 +267,26 @@ def _base_parser() -> argparse.ArgumentParser:
     p_stats.add_argument(
         "--plan", help="Path to full plan JSON for diagnostics (defaults to workspace plan)"
     )
+    subparsers_by_name["stats"] = p_stats
+    setattr(parser, "_ytmo_subparsers", subparsers_by_name)
 
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _base_parser()
-    args = parser.parse_args(argv)
+    parser = _base_parser(exit_on_error=False)
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    try:
+        args = parser.parse_args(raw_argv)
+    except argparse.ArgumentError as exc:
+        _emit_scoped_parse_help(parser, raw_argv, str(exc))
+        return 2
+    except SystemExit as exc:
+        if exc.code == 2:
+            message = getattr(parser, "_ytmo_last_error", "invalid arguments")
+            _emit_scoped_parse_help(parser, raw_argv, message)
+            return 2
+        raise
 
     workspace = Path(args.workspace).resolve()
     cwd = Path.cwd().resolve()
