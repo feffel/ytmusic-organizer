@@ -265,7 +265,7 @@ class WizardUI:
 
         self._plain_heading(title)
         for line in lines:
-            print(f"  [{level}] {line}")
+            print(f"  {line}")
 
     def render_recap(self, title: str, fields: Mapping[str, Any]) -> None:
         if not self._enabled:

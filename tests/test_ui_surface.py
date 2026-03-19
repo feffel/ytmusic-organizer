@@ -180,6 +180,25 @@ class UISurfaceTests(unittest.TestCase):
             callout_panel = console.print.call_args_list[-1].args[0]
             self.assertIn(f"[{ui._COLOR_PATH}]ytmo setup[/]", callout_panel.renderable)
 
+    def test_plain_callout_preserves_raw_command_lines(self) -> None:
+        capture = io.StringIO()
+        with patch("sys.stdout", capture):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.render_callout(
+                "warning",
+                "Setup interrupted",
+                [
+                    "How to fix:",
+                    "1. Re-run setup:",
+                    "   ytmo setup",
+                ],
+            )
+        output = capture.getvalue()
+        self.assertIn("  How to fix:", output)
+        self.assertIn("  1. Re-run setup:", output)
+        self.assertIn("     ytmo setup", output)
+        self.assertNotIn("[warning]    ytmo setup", output)
+
     def test_show_stats_treats_identity_zero_as_sparse_even_with_liked_snapshot(self) -> None:
         sparse = self._sample_result()
         sparse.update(

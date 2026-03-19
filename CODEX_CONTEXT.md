@@ -268,6 +268,8 @@ CI automation:
 - All human-mode command interruptions now use styled warning callouts (`Operation cancelled`) with a forced leading newline so shell `^C` echoes do not collide with callout content.
 - Setup interruption callout rendering now prints a leading newline before the panel so shell `^C` echoes do not collide with the callout title.
 - Rich callouts now apply line-level emphasis: heading lines (ending with `:`) are bolded and suggested command lines (for example `ytmo ...`) are highlighted with the command accent color for faster scanning.
+- Non-TTY/plain callouts preserve raw body lines (no `[warning]/[info]` prefixes), so suggested shell commands remain copy/paste-safe in redirected output and logs.
+- Interactive setup mode-selection prompt interruption (Ctrl-C/Ctrl-D) now raises the same setup-specific resume guidance (`Setup was interrupted...`) as later setup steps.
 - Resumable setup now replays previously completed setup steps as numbered `Step n/6 done ...` entries so resumed runs keep accurate step index progression instead of muted `Resuming:` notes.
 - Interactive resumed setup no longer re-prompts for default classification mode when no `--mode` override is passed; it reuses persisted `classification_mode`.
 - Interactive TTY stats output is diagnostics-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (overview), 0.18s (plan/coverage), 0.18s (queue/gaps), 0.12s (health), then frame lock.
