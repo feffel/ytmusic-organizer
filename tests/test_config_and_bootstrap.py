@@ -32,7 +32,9 @@ class ConfigAndBootstrapTests(unittest.TestCase):
         with (
             patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
             patch("ytmusic_organizer.workflows.export_liked", side_effect=fake_export_liked),
-            patch("ytmusic_organizer.workflows._obtain_full_plan", side_effect=fake_obtain_full_plan),
+            patch(
+                "ytmusic_organizer.workflows._obtain_full_plan", side_effect=fake_obtain_full_plan
+            ),
             patch(
                 "ytmusic_organizer.workflows.update_managed_playlists",
                 side_effect=fake_update_managed_playlists,
@@ -41,7 +43,9 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                 "ytmusic_organizer.workflows.apply_plan",
                 return_value={"results": [], "missing": 0},
             ),
-            patch("ytmusic_organizer.workflows.initialize_state", side_effect=fake_initialize_state),
+            patch(
+                "ytmusic_organizer.workflows.initialize_state", side_effect=fake_initialize_state
+            ),
         ):
             yield
 
@@ -103,6 +107,35 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                     interactive=False,
                 )
             self.assertIn("Run interactive setup", str(ctx.exception))
+            self.assertFalse((workspace / "config.toml").exists())
+
+    def test_setup_missing_auth_does_not_emit_workspace_ready_message(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            output = io.StringIO()
+            with patch("sys.stdout", output):
+                with self.assertRaises(FileNotFoundError):
+                    run_setup(
+                        workspace=workspace,
+                        auth_file=None,
+                        mode="manual",
+                        interactive=False,
+                        emit_ui=True,
+                    )
+
+            self.assertNotIn("Workspace ready", output.getvalue())
+
+    def test_invalid_config_toml_raises_recovery_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            config_path = workspace / "config.toml"
+            config_path.write_text("auth_file = [", encoding="utf-8")
+            with self.assertRaises(RuntimeError) as ctx:
+                load_or_create_config(config_path)
+            self.assertIn("config.toml is invalid", str(ctx.exception))
 
     def test_setup_interactive_accepts_json_style_headers_for_auth(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -233,7 +266,9 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                     interactive=False,
                 )
 
-            with patch("builtins.input", side_effect=AssertionError("input() should not be called")):
+            with patch(
+                "builtins.input", side_effect=AssertionError("input() should not be called")
+            ):
                 with self._setup_mocks():
                     run_setup(
                         workspace=workspace,

@@ -63,12 +63,22 @@ def build_helpful_error(exc: BaseException) -> str:
             "   This creates <workspace>/browser.json for you.\n"
             "2. If you already have a file, pass it explicitly:\n"
             "   ytmo setup --auth-file /absolute/path/to/browser.json\n"
-            "3. Auth guide reference:\n"
+            "3. Dry-run still requires readable auth and may call network APIs.\n"
+            "4. Auth guide reference:\n"
             "   https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html"
         )
 
     if "Setup has not been completed" in text:
-        return f"Setup is incomplete.\n{text}\n\nHow to fix:\n1. Run guided setup:\n   ytmo setup"
+        return (
+            "Setup is incomplete.\n"
+            f"{text}\n\n"
+            "How to fix:\n"
+            "1. Run guided setup:\n"
+            "   ytmo setup\n"
+            "2. Then retry your original command:\n"
+            "   ytmo sync  (weekly updates)\n"
+            "   ytmo rebuild --yes  (full rebuild)"
+        )
 
     if "Setup was interrupted" in text:
         return (
@@ -167,7 +177,7 @@ def _base_parser() -> argparse.ArgumentParser:
         command_parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Simulate actions without mutating remote playlists or workspace files",
+            help="Simulate actions without mutating remote/workspace state; may still require auth/network reads",
         )
 
     p_setup = sub.add_parser("setup", help="Guided first-time setup and initial playlist build")
@@ -474,7 +484,7 @@ def main(argv: list[str] | None = None) -> int:
             if json_output:
                 emit_json("ok", "stats", result=result)
             else:
-                ui.command_header("ytmusic-organizer stats", "share-first dashboard")
+                ui.command_header("ytmusic-organizer stats", "workspace diagnostics")
                 ui.show_stats(result)
             return 0
 

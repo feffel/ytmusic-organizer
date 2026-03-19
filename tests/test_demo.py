@@ -86,6 +86,20 @@ class DemoTests(unittest.TestCase):
                 run_demo(workspace=workspace, mode="manual", emit_ui=False)
             self.assertEqual(sleep_mock.call_count, 0)
 
+    def test_run_demo_step_list_matches_setup_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            capture = []
+
+            def fake_start_flow(self, steps=None, title=None):  # noqa: ANN001
+                capture.extend(steps or [])
+
+            with patch("ytmusic_organizer.workflows.WizardUI.start_flow", new=fake_start_flow):
+                run_demo(workspace=workspace, mode="manual", emit_ui=True)
+
+            self.assertEqual(len(capture), 6)
+            self.assertIn("Update managed playlist index", capture)
+
 
 if __name__ == "__main__":
     unittest.main()

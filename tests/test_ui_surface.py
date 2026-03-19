@@ -66,10 +66,10 @@ class UISurfaceTests(unittest.TestCase):
             ui = WizardUI(enabled=True, force_tty=False)
             ui.show_stats(self._sample_result())
         output = capture.getvalue()
-        self.assertIn("Identity Hero", output)
-        self.assertIn("Shape + Momentum", output)
-        self.assertIn("Highlights", output)
-        self.assertIn("Health Footer", output)
+        self.assertIn("Status Overview", output)
+        self.assertIn("Plan & Coverage", output)
+        self.assertIn("Queue & Gaps", output)
+        self.assertIn("Health Check", output)
         self.assertNotIn("Diagnostics:", output)
 
     def test_show_stats_sparse_mode_de_emphasizes_zeros(self) -> None:

@@ -152,7 +152,7 @@ class CliSmokeTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("Demo mode only", result.stdout)
-            self.assertIn("Step 1/5", result.stdout)
+            self.assertIn("Step 1/6", result.stdout)
             self.assertFalse(workspace.exists())
 
     def test_demo_runs_for_manual_and_api_modes(self) -> None:
@@ -204,10 +204,10 @@ class CliSmokeTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr)
-            self.assertIn("Identity Hero", result.stdout)
-            self.assertIn("Shape + Momentum", result.stdout)
-            self.assertIn("Highlights", result.stdout)
-            self.assertIn("Health Footer", result.stdout)
+            self.assertIn("Status Overview", result.stdout)
+            self.assertIn("Plan & Coverage", result.stdout)
+            self.assertIn("Queue & Gaps", result.stdout)
+            self.assertIn("Health Check", result.stdout)
             self.assertIn("Health:", result.stdout)
 
 
