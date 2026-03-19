@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import random
 import re
 import sys
 import time
@@ -21,6 +23,8 @@ except Exception:  # pragma: no cover
 
 
 class WizardUI:
+    _DEFAULT_MICROCOPY_PROBABILITY = 0.12
+    _MICROCOPY_ENV_VARS = ("YTMO_MICROCOPY_PROBABILITY", "YTMO_MICROCOPY_PROB")
     # Fixed default palette: indigo-vinyl.
     _COLOR_TITLE = "bold #f6f8ff"
     _COLOR_ACCENT = "bold #8fb2ff"
@@ -60,14 +64,92 @@ class WizardUI:
     _PATH_PATTERN = re.compile(
         r"(?P<path>(?<![:/])(?:~|/|\./|\.\./)[^\s\]\[<>{}(),;:'\"]+|[A-Za-z]:\\[^\s\]\[<>{}(),;:'\"]+)"
     )
+    _MICROCOPY_BANK: dict[str, list[dict[str, Any]]] = {
+        "stats_narrative": [
+            {
+                "text": "The algorithm still thinks in genres, and you keep proving life is messier.",
+                "tones": ("music", "philosophical", "dry_sarcastic"),
+            },
+            {
+                "text": "Identity is just repeated listening with better metadata.",
+                "tones": ("music", "philosophical"),
+            },
+        ],
+        "flow_success": [
+            {
+                "text": "Another clean take. No encore needed.",
+                "tones": ("music", "dry_sarcastic"),
+            },
+            {
+                "text": "Taste evolves, logs agree, everyone acts surprised.",
+                "tones": ("music", "philosophical", "dry_sarcastic"),
+            },
+        ],
+        "flow_info": [
+            {
+                "text": "Tiny step now, fewer regret edits later.",
+                "tones": ("philosophical",),
+            },
+            {
+                "text": "This is the part where patience outperforms speed.",
+                "tones": ("philosophical", "dry_sarcastic"),
+            },
+        ],
+        "warning_suffix": [
+            {
+                "text": "Good news: caution is still cheaper than cleanup.",
+                "tones": ("dry_sarcastic", "philosophical"),
+            },
+            {
+                "text": "The dramatic option remains available, just not recommended.",
+                "tones": ("dry_sarcastic",),
+            },
+        ],
+        "recap_footer": [
+            {
+                "text": "Same songs, better structure. Civilization advances.",
+                "tones": ("music", "dry_sarcastic"),
+            },
+            {
+                "text": "Organized chaos is still chaos, just easier to replay.",
+                "tones": ("music", "philosophical"),
+            },
+        ],
+    }
 
     def __init__(self, enabled: bool = True, force_tty: bool | None = None) -> None:
         self._enabled = enabled
         self._is_tty = bool(force_tty) if force_tty is not None else sys.stdout.isatty()
         self._console = Console() if (enabled and Console) else None
         self._rich_tty = bool(self._console and self._is_tty and Panel and Table)
+        self._microcopy_probability = self._load_microcopy_probability()
         self._flow_total = 0
         self._flow_index = 0
+
+    def _load_microcopy_probability(self) -> float:
+        for env_var in self._MICROCOPY_ENV_VARS:
+            raw = os.getenv(env_var)
+            if raw is None or not raw.strip():
+                continue
+            try:
+                value = float(raw.strip())
+            except ValueError:
+                break
+            if value < 0.0:
+                return 0.0
+            if value > 1.0:
+                return 1.0
+            return value
+        return self._DEFAULT_MICROCOPY_PROBABILITY
+
+    def _microcopy_for_slot(self, slot: str) -> str | None:
+        lines = self._MICROCOPY_BANK.get(slot, [])
+        if not lines:
+            return None
+        if random.random() >= self._microcopy_probability:
+            return None
+        selected = random.choice(lines)
+        return str(selected.get("text", "")).strip() or None
 
     def _human_plan_status(self, status: str) -> str:
         return self._PLAN_STATUS_LABELS.get(status, status)
@@ -198,23 +280,33 @@ class WizardUI:
     def step_detail(self, text: str) -> None:
         if not self._enabled:
             return
+        microcopy = self._microcopy_for_slot("flow_info")
         if self._rich_tty:
-            self._console.print(
-                f"[{self._COLOR_MUTED}]  {self._ICON_DETAIL} {self._style_paths(text)}[/]"
-            )
+            detail = self._style_paths(text)
+            if microcopy:
+                detail = f"{detail}\n    {self._style_paths(microcopy)}"
+            self._console.print(f"[{self._COLOR_MUTED}]  {self._ICON_DETAIL} {detail}[/]")
             return
         print(f"  [note] {text}")
+        if microcopy:
+            print(f"    {microcopy}")
 
     def finish_step(self, text: str) -> None:
         if not self._enabled:
             return
+        microcopy = self._microcopy_for_slot("flow_success")
         if self._rich_tty:
-            self._console.print(
+            line = (
                 f"[{self._COLOR_ACCENT}]{self._ICON_DONE} done[/] "
                 f"[{self._COLOR_MUTED}]♪[/] {self._style_paths(text)}"
             )
+            if microcopy:
+                line = f"{line}\n[{self._COLOR_MUTED}]    {self._style_paths(microcopy)}[/]"
+            self._console.print(line)
             return
         print(f"[drop] done: {text}")
+        if microcopy:
+            print(f"    {microcopy}")
 
     def finish_flow(self, text: str) -> None:
         if not self._enabled:
@@ -250,8 +342,14 @@ class WizardUI:
         elif level == "error":
             icon = self._ICON_ERROR
 
+        rendered_lines = list(lines)
+        if level == "warning":
+            suffix = self._microcopy_for_slot("warning_suffix")
+            if suffix:
+                rendered_lines.append(suffix)
+
         if self._rich_tty:
-            body = "\n".join(self._style_callout_line(line) for line in lines)
+            body = "\n".join(self._style_callout_line(line) for line in rendered_lines)
             self._console.print(
                 Panel.fit(
                     body,
@@ -264,12 +362,13 @@ class WizardUI:
             return
 
         self._plain_heading(title)
-        for line in lines:
+        for line in rendered_lines:
             print(f"  {line}")
 
     def render_recap(self, title: str, fields: Mapping[str, Any]) -> None:
         if not self._enabled:
             return
+        microcopy = self._microcopy_for_slot("recap_footer")
         if self._rich_tty:
             table = Table(show_header=False, box=None, pad_edge=False)
             table.add_column("Field", style=self._COLOR_INFO)
@@ -279,6 +378,8 @@ class WizardUI:
                     str(key).replace("_", " ").title(),
                     self._style_paths(str(value)),
                 )
+            if microcopy:
+                table.add_row("Note", self._style_paths(microcopy))
             self._console.print(
                 Panel.fit(
                     table,
@@ -292,6 +393,8 @@ class WizardUI:
         self._plain_heading(title)
         for key, value in fields.items():
             print(f"  {str(key).replace('_', ' ').title()}: {value}")
+        if microcopy:
+            print(f"  {microcopy}")
 
     def title(self, text: str) -> None:
         self.command_header(text)
@@ -381,14 +484,19 @@ class WizardUI:
 
     def _stats_narrative(self, identity_score: int, sparse: bool) -> str:
         if sparse:
-            return "Setup in progress. Build your first plan to unlock full identity."
-        if identity_score >= 85:
-            return "Curator mode active. This frame is share-ready."
-        if identity_score >= 60:
-            return "Your taste profile is coherent and growing."
-        if identity_score > 0:
-            return "Momentum building. Keep classifying for stronger identity."
-        return "Your vibe is loading."
+            base = "Setup in progress. Build your first plan to unlock full identity."
+        elif identity_score >= 85:
+            base = "Curator mode active. This frame is share-ready."
+        elif identity_score >= 60:
+            base = "Your taste profile is coherent and growing."
+        elif identity_score > 0:
+            base = "Momentum building. Keep classifying for stronger identity."
+        else:
+            base = "Your vibe is loading."
+        suffix = self._microcopy_for_slot("stats_narrative")
+        if not suffix:
+            return base
+        return f"{base} {suffix}"
 
     def _stats_top_playlist_label(self, top_playlists: Any) -> str:
         if isinstance(top_playlists, list) and top_playlists:
