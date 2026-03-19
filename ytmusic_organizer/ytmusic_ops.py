@@ -52,7 +52,9 @@ def export_liked_data(yt: YTMusic) -> list[dict[str, Any]]:
 def export_liked(yt: YTMusic, output_path: Path) -> list[dict[str, Any]]:
     tracks = export_liked_data(yt)
 
-    atomic_write_text(output_path, json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(
+        output_path, json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return tracks
 
 
@@ -82,7 +84,9 @@ def export_new_likes(yt: YTMusic, state_path: Path, output_path: Path) -> list[d
     processed = set(state.get("processed_video_ids", []))
     tracks = export_new_likes_data(yt, processed)
 
-    atomic_write_text(output_path, json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(
+        output_path, json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return tracks
 
 
@@ -305,8 +309,7 @@ def apply_plan(
         )
 
     atomic_write_text(
-        missing_path,
-        json.dumps(missing_items, ensure_ascii=False, indent=2), encoding="utf-8"
+        missing_path, json.dumps(missing_items, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
     return {"results": results, "missing": len(missing_items)}
@@ -387,7 +390,9 @@ def apply_new_likes(
         json.dumps({"processed_video_ids": sorted(processed)}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    atomic_write_text(missing_path, json.dumps(missing, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(
+        missing_path, json.dumps(missing, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     return {"results": results, "missing": len(missing), "processed": len(matched_video_ids)}
 

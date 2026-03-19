@@ -37,8 +37,7 @@ def load_or_create_config(path: Path) -> Config:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise RuntimeError(
-            f"config.toml is invalid at {path}. "
-            "Fix or delete it, then rerun `ytmo setup`."
+            f"config.toml is invalid at {path}. Fix or delete it, then rerun `ytmo setup`."
         ) from exc
     return Config(
         auth_file=str(data.get("auth_file", "browser.json")),

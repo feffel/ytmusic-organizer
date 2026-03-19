@@ -668,14 +668,16 @@ def _obtain_full_plan(
         if selected_plan_output:
             atomic_write_text(
                 selected_plan_output,
-                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+                json.dumps(plan, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
             atomic_write_text(
                 selected_plan_output,
-                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+                json.dumps(plan, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
 
     return validate_full_plan(plan)
@@ -741,14 +743,16 @@ def _obtain_new_plan(
         if selected_plan_output:
             atomic_write_text(
                 selected_plan_output,
-                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+                json.dumps(plan, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
             atomic_write_text(
                 selected_plan_output,
-                json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+                json.dumps(plan, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
 
     return validate_new_plan(plan)
