@@ -52,7 +52,27 @@ def find_match(
     if len(strong) == 1:
         return strong[0], "exact"
     if len(strong) > 1:
-        return strong[0], "ambiguous"
+        return _pick_best(song, strong), "ambiguous"
     if len(loose) == 1:
         return loose[0], "loose"
     return None, "missing"
+
+
+def _pick_best(song: dict[str, Any], matches: list[dict[str, Any]]) -> dict[str, Any]:
+    plan_title = normalize(song.get("title", ""))
+    plan_artist = normalize(song.get("artist", ""))
+
+    def sort_key(track: dict[str, Any]) -> tuple[Any, ...]:
+        track_title = normalize(track.get("title", ""))
+        artists = [normalize(a) for a in (track.get("artists") or [])]
+        artist_exact = any(a == plan_artist for a in artists if a)
+        return (
+            0 if track_title == plan_title else 1,
+            0 if artist_exact else 1,
+            abs(len(track_title) - len(plan_title)),
+            track_title,
+            " ".join(artists),
+            str(track.get("videoId", "")),
+        )
+
+    return sorted(matches, key=sort_key)[0]

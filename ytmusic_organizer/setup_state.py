@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .io_utils import atomic_write_text
+
 
 class SetupState:
     def __init__(self, path: Path):
@@ -18,8 +20,11 @@ class SetupState:
             return {"completed": False, "steps": {}, "last_error": "invalid setup state file"}
 
     def _save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_text(
+            self.path,
+            json.dumps(self._data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     @property
     def completed(self) -> bool:

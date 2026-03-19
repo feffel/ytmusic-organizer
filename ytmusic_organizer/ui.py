@@ -422,10 +422,10 @@ class WizardUI:
             footer.append(("Diagnostics", diagnostics_line, False))
 
         return [
-            ("Identity Hero", hero),
-            ("Shape + Momentum", shape),
-            ("Highlights", highlights),
-            ("Health Footer", footer),
+            ("Status Overview", hero),
+            ("Plan & Coverage", shape),
+            ("Queue & Gaps", highlights),
+            ("Health Check", footer),
         ]
 
     def _render_stats_canvas(self, sections: list[tuple[str, list[tuple[str, str, bool]]]]) -> str:

@@ -57,7 +57,7 @@ Flow:
 2. Run non-failing diagnostics for malformed/missing artifacts.
 3. Optionally validate/diagnose plan quality against `data/liked_songs.json`.
 4. Derive share-oriented local insights (`identity_score`, `top_playlists`, `coverage_ratio`, collection/momentum labels).
-5. Render human output via a TTY-first single-canvas dashboard (`Identity Hero`, `Shape + Momentum`, `Highlights`, `Health Footer`) or plain grouped text when not in TTY.
+5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Queue & Gaps`, `Health Check`) or plain grouped text when not in TTY.
 
 Implementation location:
 - Orchestration and insight derivation: `ytmusic_organizer/workflows.py` (`run_stats`)
@@ -120,10 +120,12 @@ Maintainer automation scripts live under `scripts/` and write outputs to ignored
 - `ytmusic_organizer/ytmusic_ops.py::export_liked`
 Reads: YouTube Music API liked songs.
 Writes: `data/liked_songs.json`.
+Notes: uses unbounded API fetch (`limit=None`) to avoid silent truncation on large libraries.
 
 - `ytmusic_organizer/ytmusic_ops.py::export_new_likes`
 Reads: YouTube Music API liked songs, `state.json`.
 Writes: `data/new_likes.json`.
+Notes: tolerates malformed `state.json` by falling back to empty processed set.
 
 - `ytmusic_organizer/ytmusic_ops.py::apply_plan`
 Reads: `data/liked_songs.json`, `data/playlist_plan.json`, existing library playlists.
@@ -132,6 +134,7 @@ Writes: playlist changes remotely; `data/missing_matches.json` locally.
 - `ytmusic_organizer/ytmusic_ops.py::apply_new_likes`
 Reads: `data/new_likes.json`, `data/new_plan.json`, `state.json`, existing library playlists.
 Writes: playlist additions remotely; updates `state.json`; writes `data/missing_matches.json`.
+Notes: tolerates malformed `state.json` by resetting to default structure.
 
 - `ytmusic_organizer/ytmusic_ops.py::initialize_state`
 Reads: `data/liked_songs.json`.
@@ -140,6 +143,7 @@ Writes: `state.json`.
 - `ytmusic_organizer/ytmusic_ops.py::delete_managed_playlists`
 Reads: `managed_playlists.json`, current library playlists.
 Writes: remote playlist deletions by playlist ID only; legacy name-only entries are skipped conservatively.
+Notes: library and playlist reads now use unbounded fetch (`limit=None`).
 
 - `ytmusic_organizer/ytmusic_ops.py::simulate_delete_managed_playlists`
 Reads: `managed_playlists.json`, optionally current library playlists.
@@ -151,6 +155,7 @@ Writes: `managed_playlists.json`.
 
 - `ytmusic_organizer/workflows.py`
 Orchestration for setup/sync/rebuild/cleanup/stats, dry-run simulation paths, terminal-only demo simulation, and stats insight derivation.
+Setup now persists `config.toml` only after auth is confirmed, so failed auth does not produce misleading "workspace ready" completion state.
 
 - `ytmusic_organizer/cli.py`
 Command parsing and user-facing flow control.
@@ -199,8 +204,11 @@ Makefile execution detail:
 - All targets run through `.venv/bin/python` and require `.venv` to exist.
 - `check-venv` guard fails fast with setup instructions if `.venv` is missing.
 
-Automation docs:
+Documentation split:
+- `README.md` is intentionally short and optimized for discoverability + first run.
+- `docs/reference.md` holds detailed CLI/options/modes/workspace/troubleshooting/development reference.
 - `docs/automation.md` is the integration contract for agents/scripts (non-interactive flags, manual-mode input behavior, JSON output shape).
+- `docs/collaborators.md` is collaborator-only guidance (demo asset generation, launch/release/CI workflow pointers).
 
 Release automation:
 - `.github/workflows/release-pypi.yml` publishes on `v*` tags (and manual dispatch) using Trusted Publishing (OIDC).
@@ -249,18 +257,22 @@ CI automation:
 - Never delete arbitrary playlists outside managed index.
 - Do not overwrite or expose `browser.json`.
 - Interactive auth setup captures paste in non-canonical TTY mode (to avoid long-line truncation), and both TTY/non-TTY now share one header-collection state machine: auto-detect JSON-vs-raw input, complete on closing `}` (JSON) or blank line (raw), and validate required keys (`cookie`, `x-goog-authuser`) before writing auth.
+- Setup writes `config.toml` transactionally after auth is ready; missing auth no longer emits a premature workspace-ready success line.
 - Interactive manual plan input no longer depends on EOF signals; it accepts line-based paste, auto-submits once JSON parses, and allows blank-line submit for raw/fenced retries.
 - Manual classification callouts now explicitly instruct users to run the generated prompt in their AI tool and paste back the full output JSON.
 - Human-facing CLI output uses a TTY-first renderer with guided stepper progress for setup/sync/rebuild/demo, recap cards for command completion, and callout-style confirmations.
 - Resumable setup now replays previously completed setup steps as numbered `Step n/6 done ...` entries so resumed runs keep accurate step index progression instead of muted `Resuming:` notes.
 - Interactive resumed setup no longer re-prompts for default classification mode when no `--mode` override is passed; it reuses persisted `classification_mode`.
-- Interactive TTY stats output is share-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (hero), 0.18s (shape/momentum), 0.18s (highlights), 0.12s (footer), then frame lock.
+- Interactive TTY stats output is diagnostics-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (overview), 0.18s (plan/coverage), 0.18s (queue/gaps), 0.12s (health), then frame lock.
 - Non-TTY output stays deterministic plain text with the same information hierarchy.
 - `--json` output remains machine-stable.
 - `state.json` should only grow during incremental sync; full rebuild intentionally reinitializes it.
+- `run_stats` is now read-only and does not create workspace directories.
+- Core state/config/plan writes use atomic write-then-replace to reduce partial-write corruption risk.
+- `cleanup` now removes local artifacts even when auth is missing; remote deletion is skipped and reported as a warning field.
 - `ytmo rebuild` and `ytmo cleanup` are destructive by design and require explicit confirmation unless `--yes` is passed.
 - `ytmo setup` is non-destructive for existing remote playlists (create/populate only).
-- `--dry-run` for setup/sync/rebuild/cleanup performs read-only simulation: no remote playlist mutations and no workspace writes.
+- `--dry-run` for setup/sync/rebuild/cleanup performs read-only simulation: no remote playlist mutations and no workspace writes, but auth and network reads may still be required.
 - Manual-mode dry-run writes prompt text only to temporary files outside workspace and auto-deletes them.
 - `ytmo demo` is always simulation-only: no auth setup, no YTMusic/OpenAI calls, no playlist mutations, and no workspace writes.
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.

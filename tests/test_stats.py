@@ -21,6 +21,7 @@ class StatsTests(unittest.TestCase):
             self.assertFalse(result["artifact_presence"]["state"])
             self.assertEqual(result["plan_diagnostics"]["status"], "skipped_missing_plan")
             self.assertEqual(result["warnings"], [])
+            self.assertFalse(workspace.exists())
 
     def test_run_stats_partial_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
