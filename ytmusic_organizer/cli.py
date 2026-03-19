@@ -11,6 +11,11 @@ from .ui import WizardUI
 from .workflows import run_cleanup, run_demo, run_full_reset, run_setup, run_stats, run_weekly_sync
 
 
+class _YtmoArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise argparse.ArgumentError(None, message)
+
+
 def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> None:
     if workspace == cwd:
         return
@@ -162,7 +167,7 @@ def _emit_scoped_parse_help(parser: argparse.ArgumentParser, argv: list[str], me
 
 
 def _base_parser(*, exit_on_error: bool = True) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _YtmoArgumentParser(
         prog="ytmo",
         description=f"YouTube Music Organizer CLI (v{__version__})",
         formatter_class=argparse.RawTextHelpFormatter,
