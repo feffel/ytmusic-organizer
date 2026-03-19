@@ -262,6 +262,9 @@ CI automation:
 - Manual classification callouts now explicitly instruct users to run the generated prompt in their AI tool and paste back the full output JSON.
 - Human-facing CLI output uses a TTY-first renderer with guided stepper progress for setup/sync/rebuild/demo, recap cards for command completion, and callout-style confirmations.
 - Human-facing CLI output follows the Neon Stage theme across surfaces while remaining pure CLI (no full-screen TUI): rich mode uses icon-accented lines/cards plus waveform/queue cues and stats-section music markers, while plain mode uses stable ASCII tags so logs stay script-friendly.
+- Human-facing copy includes optional music-inspired microcopy with dry, gentle sarcasm, injected additively only (never replacing actionable core text).
+- Easter-egg microcopy slots: `flow_info`, `flow_success`, `warning_suffix`, `recap_footer`, `stats_narrative`.
+- Microcopy appearance is true-random per eligible slot, default probability `0.12`, configurable via `YTMO_MICROCOPY_PROBABILITY` (or `YTMO_MICROCOPY_PROB`), clamped to `[0.0, 1.0]`.
 - UI theming is now fixed to the `indigo-vinyl` palette by default (no runtime theme knob), keeping contrast stable and avoiding color-state ambiguity across terminals.
 - Top-level CLI interruption handling is traceback-safe: `KeyboardInterrupt`/`EOFError` return user-facing guidance instead of uncaught tracebacks.
 - Setup interruption guidance is rendered as a styled warning callout (`Setup interrupted`) in human mode, while JSON mode keeps machine-readable error payloads.

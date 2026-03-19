@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import tempfile
+import os
 from pathlib import Path
 import unittest
 
@@ -133,6 +134,30 @@ class CliSmokeTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertIn("Action cancelled", result.stdout)
+
+    def test_cleanup_cancelled_keeps_anchor_when_microcopy_is_forced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            env = os.environ.copy()
+            env["YTMO_MICROCOPY_PROBABILITY"] = "1"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "ytmusic_organizer.cli",
+                    "cleanup",
+                    "--workspace",
+                    str(workspace),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                input="n\n",
+                env=env,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Action cancelled", result.stdout)
+            self.assertIn("No changes were applied.", result.stdout)
 
     def test_demo_runs_with_default_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

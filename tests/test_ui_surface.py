@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import unittest
 from unittest.mock import patch
 
@@ -255,6 +256,76 @@ class UISurfaceTests(unittest.TestCase):
         self.assertIn("[note] Scanning source workspace", output)
         self.assertIn("[drop] done: Detected 2 new likes", output)
         self.assertIn("[encore] Flow complete: Sync completed", output)
+
+    def test_microcopy_probability_defaults_to_twelve_percent(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            ui = WizardUI(enabled=True, force_tty=False)
+        self.assertEqual(ui._microcopy_probability, 0.12)
+
+    def test_warning_microcopy_is_additive_and_keeps_primary_line(self) -> None:
+        capture = io.StringIO()
+        with (
+            patch("sys.stdout", capture),
+            patch("ytmusic_organizer.ui.random.random", return_value=0.01),
+            patch("ytmusic_organizer.ui.random.choice", return_value={"text": "SARC_LINE"}),
+        ):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.render_callout("warning", "Caution", ["No changes were applied."])
+        output = capture.getvalue()
+        self.assertIn("No changes were applied.", output)
+        self.assertIn("Caution", output)
+        self.assertIn("SARC_LINE", output)
+
+    def test_warning_microcopy_not_added_when_probability_misses(self) -> None:
+        capture = io.StringIO()
+        with (
+            patch("sys.stdout", capture),
+            patch("ytmusic_organizer.ui.random.random", return_value=0.99),
+        ):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.render_callout("warning", "Caution", ["No changes were applied."])
+        output = capture.getvalue()
+        self.assertIn("No changes were applied.", output)
+        self.assertNotIn("SARC_LINE", output)
+
+    def test_error_callouts_do_not_receive_warning_suffix(self) -> None:
+        capture = io.StringIO()
+        with (
+            patch("sys.stdout", capture),
+            patch("ytmusic_organizer.ui.random.random", return_value=0.0),
+        ):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.render_callout("error", "Error", ["Auth file is missing."])
+        output = capture.getvalue()
+        self.assertIn("Auth file is missing.", output)
+        self.assertNotIn("SARC_LINE", output)
+
+    def test_recap_can_append_optional_microcopy(self) -> None:
+        capture = io.StringIO()
+        with (
+            patch("sys.stdout", capture),
+            patch("ytmusic_organizer.ui.random.random", return_value=0.01),
+            patch("ytmusic_organizer.ui.random.choice", return_value={"text": "SARC_LINE"}),
+        ):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.render_recap("Sync Complete", {"new_likes": 3})
+        output = capture.getvalue()
+        self.assertIn("Sync Complete", output)
+        self.assertIn("New Likes: 3", output)
+        self.assertIn("SARC_LINE", output)
+
+    def test_finish_step_can_append_optional_microcopy(self) -> None:
+        capture = io.StringIO()
+        with (
+            patch("sys.stdout", capture),
+            patch("ytmusic_organizer.ui.random.random", return_value=0.01),
+            patch("ytmusic_organizer.ui.random.choice", return_value={"text": "SARC_LINE"}),
+        ):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.finish_step("Plan ready")
+        output = capture.getvalue()
+        self.assertIn("[drop] done: Plan ready", output)
+        self.assertIn("SARC_LINE", output)
 
 
 if __name__ == "__main__":
