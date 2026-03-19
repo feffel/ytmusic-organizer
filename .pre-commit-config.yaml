@@ -16,7 +16,7 @@ repos:
     hooks:
       - id: ensure-up-to-date-base
         name: Ensure branch includes latest default branch
-        entry: ./scripts/git/ensure-up-to-date-base.sh origin
+        entry: ./scripts/git/ensure-up-to-date-base.sh
         language: system
         pass_filenames: false
         always_run: true

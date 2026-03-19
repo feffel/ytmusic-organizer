@@ -1,7 +1,6 @@
 .PHONY: check-venv setup sync rebuild cleanup stats test verify verify-base pr-ready hooks-install demo-record demo-render demo-check launch-generate
 
 VENV_PYTHON := .venv/bin/python
-DEFAULT_REMOTE := origin
 
 check-venv:
 	@test -x $(VENV_PYTHON) || (echo "Error: .venv not found. Create it with: python -m venv .venv && . .venv/bin/activate && pip install -e ." && exit 1)
@@ -30,7 +29,7 @@ verify: check-venv
 	$(VENV_PYTHON) -m unittest discover -s tests -v
 
 verify-base:
-	./scripts/git/ensure-up-to-date-base.sh $(DEFAULT_REMOTE)
+	./scripts/git/ensure-up-to-date-base.sh
 
 pr-ready: verify-base verify
 

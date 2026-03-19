@@ -233,7 +233,7 @@ CI automation:
 - `.github/dependabot.yml` keeps pip and GitHub Actions dependencies updated weekly.
 
 Local quality gates:
-- `.pre-commit-config.yaml` includes `pre-push` hooks that enforce branch freshness (`scripts/git/ensure-up-to-date-base.sh origin`) and run `make verify`.
+- `.pre-commit-config.yaml` includes `pre-push` hooks that enforce branch freshness (`scripts/git/ensure-up-to-date-base.sh`) and run `make verify`.
 - Install with `make hooks-install`.
 
 # Data Flow
