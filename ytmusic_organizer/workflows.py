@@ -13,6 +13,7 @@ from typing import Any, Callable
 from ytmusicapi import setup as ytmusic_setup
 
 from .config import Config, load_or_create_config, save_config
+from .io_utils import atomic_write_text
 from .paths import WorkspacePaths, ensure_workspace_dirs
 from .planning import classify_with_openai, read_json_from_stdin, render_prompt
 from .setup_state import SetupState
@@ -50,7 +51,7 @@ def ensure_bootstrap_completed(marker_path: Path) -> None:
 
 
 def _set_bootstrap_completed(marker_path: Path, completed: bool = True) -> None:
-    marker_path.write_text(json.dumps({"completed": completed}, indent=2), encoding="utf-8")
+    atomic_write_text(marker_path, json.dumps({"completed": completed}, indent=2), encoding="utf-8")
 
 
 def _cleanup_artifact_paths(paths: WorkspacePaths) -> list[Path]:
@@ -329,11 +330,12 @@ def run_demo(
     ui.start_flow(
         title="ytmusic-organizer demo",
         steps=[
-            "Workspace and config",
             "Auth check",
             "Export full liked songs",
             "Generate playlist plan",
-            "Create playlists and initialize state",
+            "Create and fill playlists",
+            "Update managed playlist index",
+            "Initialize incremental state",
         ],
     )
     ui.render_callout(
@@ -343,15 +345,9 @@ def run_demo(
     )
     pause(0.6)
 
-    ui.start_step("Workspace and config")
+    ui.start_step("Auth check")
     ui.step_detail(f"Workspace: {workspace}")
     ui.step_detail(f"Mode: {selected_mode}")
-    ui.step_detail("Preparing setup inputs (simulated)...")
-    pause(0.9)
-    ui.finish_step("Workspace ready (simulated)")
-    pause(0.5)
-
-    ui.start_step("Auth check")
     ui.step_detail("Checking browser auth file (simulated)...")
     pause(0.8)
     ui.step_detail("Using sample browser headers: cookie and x-goog-authuser.")
@@ -377,16 +373,26 @@ def run_demo(
     ui.finish_step(f"Plan ready with {fake_playlists} playlists (simulated)")
     pause(0.5)
 
-    ui.start_step("Create playlists and initialize state")
+    ui.start_step("Create and fill playlists")
     fake_added = 42
     fake_missing = 3
     ui.step_detail("Resolving matches and playlist diffs (simulated)...")
     pause(1.1)
-    ui.step_detail("Saving processed IDs (simulated)...")
-    pause(0.8)
     ui.finish_step(
         f"Playlists created/updated (simulated): added={fake_added}, missing={fake_missing}"
     )
+    pause(0.5)
+
+    ui.start_step("Update managed playlist index")
+    ui.step_detail("Refreshing managed playlist IDs (simulated)...")
+    pause(0.8)
+    ui.finish_step("Managed playlist index updated (simulated)")
+    pause(0.5)
+
+    ui.start_step("Initialize incremental state")
+    ui.step_detail("Saving processed IDs (simulated)...")
+    pause(0.8)
+    ui.finish_step("State initialized (simulated)")
     pause(0.6)
     ui.finish_flow("Demo completed (simulated)")
 
@@ -491,19 +497,25 @@ def run_setup(
     )
     has_resume_progress = any(state.is_step_done(step) for step in tracked_setup_steps)
 
-    config = load_or_create_config(paths.config)
+    config = _load_config_readonly(paths.config)
     if auth_file:
         config.auth_file = auth_file
     if mode:
         config.classification_mode = mode
 
     if interactive and not mode and not has_resume_progress:
+        if emit_ui:
+            ui.render_callout(
+                "info",
+                "Choose classification mode",
+                [
+                    "manual: free and fully controllable, but you must paste JSON output each run.",
+                    "api: fastest flow with automatic plan generation, but requires OPENAI_API_KEY and API cost.",
+                ],
+            )
         choice = input("Default mode [manual/api] (manual): ").strip().lower()
         if choice in {"manual", "api"}:
             config.classification_mode = choice
-
-    save_config(paths.config, config)
-    ui.success(f"Workspace ready at {paths.root}")
 
     try:
         auth_path = _resolve_auth_path(config.auth_file, paths.root)
@@ -520,7 +532,9 @@ def run_setup(
                     )
 
                 ui.warning("No auth file found in workspace.")
-                ui.note("Starting browser auth setup.")
+                ui.note("Starting browser auth setup (from browser network request headers).")
+                ui.note("Required keys: cookie and x-goog-authuser.")
+                ui.note("x-goog-authuser is usually 0 or 1 from request headers.")
                 ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
                 headers_raw = _collect_auth_headers_from_stdin(ui=ui)
                 ytmusic_setup(filepath=str(auth_path), headers_raw=headers_raw)
@@ -531,6 +545,9 @@ def run_setup(
             ui.success("Auth ready")
         else:
             ui.replay_completed_step("Auth check already completed")
+
+        save_config(paths.config, config)
+        ui.success(f"Workspace ready at {paths.root}")
 
         yt = make_ytmusic(auth_path)
         selected_mode = _effective_mode(mode, config)
@@ -621,7 +638,7 @@ def _obtain_full_plan(
         },
     )
     selected_prompt_path = prompt_path or (paths.data_dir / "full_reset_prompt_filled.txt")
-    selected_prompt_path.write_text(prompt_text, encoding="utf-8")
+    atomic_write_text(selected_prompt_path, prompt_text, encoding="utf-8")
     selected_plan_output = (
         plan_output_path
         if plan_output_path is not None
@@ -649,13 +666,15 @@ def _obtain_full_plan(
             )
         plan = read_json_from_stdin()
         if selected_plan_output:
-            selected_plan_output.write_text(
+            atomic_write_text(
+                selected_plan_output,
                 json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
             )
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
-            selected_plan_output.write_text(
+            atomic_write_text(
+                selected_plan_output,
                 json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
             )
 
@@ -692,7 +711,7 @@ def _obtain_new_plan(
         },
     )
     selected_prompt_path = prompt_path or (paths.data_dir / "new_songs_prompt_filled.txt")
-    selected_prompt_path.write_text(prompt_text, encoding="utf-8")
+    atomic_write_text(selected_prompt_path, prompt_text, encoding="utf-8")
     selected_plan_output = (
         plan_output_path
         if plan_output_path is not None
@@ -720,13 +739,15 @@ def _obtain_new_plan(
             )
         plan = read_json_from_stdin()
         if selected_plan_output:
-            selected_plan_output.write_text(
+            atomic_write_text(
+                selected_plan_output,
                 json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
             )
     else:
         plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
-            selected_plan_output.write_text(
+            atomic_write_text(
+                selected_plan_output,
                 json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
             )
 
@@ -978,22 +999,27 @@ def _run_cleanup(
 
     deleted = 0
     skipped_legacy: list[str] = []
+    remote_delete_error: str | None = None
     if not local_only:
-        config = load_or_create_config(paths.config)
+        config = _load_config_readonly(paths.config)
         auth_path = _resolve_auth_path(config.auth_file, paths.root)
-        if not auth_path.exists():
-            raise FileNotFoundError(f"Auth file not found: {auth_path}")
-        yt = make_ytmusic(auth_path)
-        delete_result = delete_managed_playlists(yt, paths.managed)
-        deleted = delete_result.get("deleted", 0)
-        skipped_legacy = delete_result.get("skipped_legacy", [])
+        if auth_path.exists():
+            yt = make_ytmusic(auth_path)
+            delete_result = delete_managed_playlists(yt, paths.managed)
+            deleted = delete_result.get("deleted", 0)
+            skipped_legacy = delete_result.get("skipped_legacy", [])
+        else:
+            remote_delete_error = f"Auth file not found: {auth_path}"
 
     removed_local = cleanup_local_artifacts(paths.root)
-    return {
+    result = {
         "deleted_playlists": deleted,
         "removed_local_files": removed_local,
         "skipped_legacy": skipped_legacy,
     }
+    if remote_delete_error:
+        result["remote_delete_error"] = remote_delete_error
+    return result
 
 
 def _read_json_file(
@@ -1076,7 +1102,6 @@ def _derive_stats_insights(
 
 def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
     paths = WorkspacePaths(workspace)
-    ensure_workspace_dirs(paths)
     warnings: list[str] = []
 
     state = _read_json_file(paths.state, warnings=warnings, label="state.json")

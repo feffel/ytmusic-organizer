@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import tomllib
 
+from .io_utils import atomic_write_text
+
 
 @dataclass(eq=True)
 class Config:
@@ -22,8 +24,7 @@ def _to_toml(config: Config) -> str:
 
 
 def save_config(path: Path, config: Config) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_to_toml(config), encoding="utf-8")
+    atomic_write_text(path, _to_toml(config), encoding="utf-8")
 
 
 def load_or_create_config(path: Path) -> Config:
@@ -32,7 +33,13 @@ def load_or_create_config(path: Path) -> Config:
         save_config(path, config)
         return config
 
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise RuntimeError(
+            f"config.toml is invalid at {path}. "
+            "Fix or delete it, then rerun `ytmo setup`."
+        ) from exc
     return Config(
         auth_file=str(data.get("auth_file", "browser.json")),
         classification_mode=str(data.get("classification_mode", "manual")),

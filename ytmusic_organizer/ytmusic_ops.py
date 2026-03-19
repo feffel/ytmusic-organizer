@@ -8,6 +8,7 @@ from typing import Any
 import requests
 from ytmusicapi import YTMusic
 
+from .io_utils import atomic_write_text
 from .matching import find_match, normalize
 
 
@@ -33,7 +34,7 @@ def make_ytmusic(auth_file: Path) -> YTMusic:
 
 
 def export_liked_data(yt: YTMusic) -> list[dict[str, Any]]:
-    songs = yt.get_liked_songs(limit=5000)
+    songs = yt.get_liked_songs(limit=None)
     tracks = []
     for t in songs.get("tracks", []):
         tracks.append(
@@ -51,13 +52,12 @@ def export_liked_data(yt: YTMusic) -> list[dict[str, Any]]:
 def export_liked(yt: YTMusic, output_path: Path) -> list[dict[str, Any]]:
     tracks = export_liked_data(yt)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(output_path, json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8")
     return tracks
 
 
 def export_new_likes_data(yt: YTMusic, processed_video_ids: set[str]) -> list[dict[str, Any]]:
-    songs = yt.get_liked_songs(limit=5000)
+    songs = yt.get_liked_songs(limit=None)
     tracks = []
 
     for t in songs.get("tracks", []):
@@ -77,16 +77,12 @@ def export_new_likes_data(yt: YTMusic, processed_video_ids: set[str]) -> list[di
 
 
 def export_new_likes(yt: YTMusic, state_path: Path, output_path: Path) -> list[dict[str, Any]]:
-    if state_path.exists():
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    else:
-        state = {"processed_video_ids": []}
+    state = _load_json_or_default(state_path, {"processed_video_ids": []})
 
     processed = set(state.get("processed_video_ids", []))
     tracks = export_new_likes_data(yt, processed)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(output_path, json.dumps(tracks, ensure_ascii=False, indent=2), encoding="utf-8")
     return tracks
 
 
@@ -105,7 +101,8 @@ def initialize_state(liked_path: Path, state_path: Path) -> None:
     liked = json.loads(liked_path.read_text(encoding="utf-8"))
     ids = initialize_state_data(liked)
 
-    state_path.write_text(
+    atomic_write_text(
+        state_path,
         json.dumps({"processed_video_ids": ids}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -128,7 +125,8 @@ def update_managed_playlists(
         seen.add(key)
         playlists.append(_managed_entry(name, playlist_id))
 
-    managed_path.write_text(
+    atomic_write_text(
+        managed_path,
         json.dumps({"schema_version": 2, "playlists": playlists}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -139,7 +137,7 @@ def delete_managed_playlists(yt: YTMusic, managed_path: Path) -> dict[str, Any]:
     managed_ids, skipped_legacy = _managed_ids_from_path(managed_path)
     library_ids = {
         str(playlist.get("playlistId") or "").strip()
-        for playlist in yt.get_library_playlists(limit=500)
+        for playlist in yt.get_library_playlists(limit=None)
         if str(playlist.get("playlistId") or "").strip()
     }
     deleted = 0
@@ -155,7 +153,7 @@ def _managed_ids_from_path(managed_path: Path) -> tuple[set[str], list[str]]:
     if not managed_path.exists():
         return set(), []
 
-    managed = json.loads(managed_path.read_text(encoding="utf-8"))
+    managed = _load_json_or_default(managed_path, {"schema_version": 2, "playlists": []})
     playlists = managed.get("playlists", [])
     if not isinstance(playlists, list):
         playlists = []
@@ -187,7 +185,7 @@ def simulate_delete_managed_playlists(yt: YTMusic | None, managed_path: Path) ->
 
     library_ids = {
         str(playlist.get("playlistId") or "").strip()
-        for playlist in yt.get_library_playlists(limit=500)
+        for playlist in yt.get_library_playlists(limit=None)
         if str(playlist.get("playlistId") or "").strip()
     }
     would_delete = 0
@@ -198,7 +196,7 @@ def simulate_delete_managed_playlists(yt: YTMusic | None, managed_path: Path) ->
 
 
 def _build_existing_playlist_map(yt: YTMusic) -> dict[str, dict[str, str]]:
-    playlists = yt.get_library_playlists(limit=500)
+    playlists = yt.get_library_playlists(limit=None)
     playlist_map = {}
 
     for p in playlists:
@@ -212,7 +210,7 @@ def _build_existing_playlist_map(yt: YTMusic) -> dict[str, dict[str, str]]:
 
 def _existing_ids(yt: YTMusic, playlist_id: str) -> set[str]:
     try:
-        playlist = yt.get_playlist(playlist_id, limit=5000)
+        playlist = yt.get_playlist(playlist_id, limit=None)
     except Exception:
         return set()
 
@@ -306,8 +304,8 @@ def apply_plan(
             }
         )
 
-    missing_path.parent.mkdir(parents=True, exist_ok=True)
-    missing_path.write_text(
+    atomic_write_text(
+        missing_path,
         json.dumps(missing_items, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
@@ -323,11 +321,7 @@ def apply_new_likes(
 ) -> dict[str, Any]:
     new_likes = json.loads(new_likes_path.read_text(encoding="utf-8"))
     plan = json.loads(new_plan_path.read_text(encoding="utf-8"))
-    state = (
-        json.loads(state_path.read_text(encoding="utf-8"))
-        if state_path.exists()
-        else {"processed_video_ids": []}
-    )
+    state = _load_json_or_default(state_path, {"processed_video_ids": []})
     processed = set(state.get("processed_video_ids", []))
 
     playlist_map = _build_existing_playlist_map(yt)
@@ -388,11 +382,12 @@ def apply_new_likes(
         results.append({"name": name, "status": "ok", "added": len(to_add)})
 
     processed.update(matched_video_ids)
-    state_path.write_text(
+    atomic_write_text(
+        state_path,
         json.dumps({"processed_video_ids": sorted(processed)}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    missing_path.write_text(json.dumps(missing, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(missing_path, json.dumps(missing, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return {"results": results, "missing": len(missing), "processed": len(matched_video_ids)}
 
@@ -568,3 +563,15 @@ def diagnose_plan_matches(liked: list[dict[str, Any]], plan: dict[str, Any]) -> 
         "loose": total_loose,
         "ambiguous": total_ambiguous,
     }
+
+
+def _load_json_or_default(path: Path, default: dict[str, Any]) -> dict[str, Any]:
+    if not path.exists():
+        return default
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return default
+    if not isinstance(loaded, dict):
+        return default
+    return loaded
