@@ -180,11 +180,10 @@ Demo capture/render/validation helpers. Outputs go to `artifacts/demo/` and are 
 Generates launch input bundle (`project-metadata.json`, `CHANGELOG.md`, `stats.json`) in `artifacts/launch/<timestamp>/` for private launch orchestration.
 
 # Shell Workflows
-No dedicated shell wrapper scripts are used.
-
 Canonical execution paths:
 1. Direct CLI via `ytmo ...` (or `python -m ytmusic_organizer.cli ...`).
 2. `make` targets that delegate to the CLI.
+3. `make` verification targets for pre-push/PR readiness.
 
 # Make Targets
 Current `Makefile` targets are:
@@ -195,6 +194,9 @@ Current `Makefile` targets are:
 - `ytmo demo` -> simulation-only setup walkthrough (`--mode manual|api`), no remote/local side effects
 - `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
+- `make verify` -> run lint (`ruff check`), format check (`ruff format --check`), and unit tests
+- `make pr-ready` -> alias of `make verify` for PR readiness checks
+- `make hooks-install` -> install local `pre-commit` and `pre-push` hooks
 - `make demo-record` -> record CLI demo cast to ignored artifacts
 - `make demo-render` -> render demo gif/mp4 from cast
 - `make demo-check` -> fail when `.cast/.gif/.mp4` files are tracked in git
@@ -202,7 +204,7 @@ Current `Makefile` targets are:
 
 Makefile execution detail:
 - All targets run through `.venv/bin/python` and require `.venv` to exist.
-- `check-venv` guard fails fast with setup instructions if `.venv` is missing.
+- `check-venv` guard fails fast with setup instructions if `.venv` is missing; setup guidance installs editable package with dev extras (`pip install -e .[dev]`) so `ruff`/`pre-commit` targets work.
 
 Documentation split:
 - `README.md` is intentionally short and optimized for discoverability + first run.
@@ -218,9 +220,14 @@ Release automation:
 
 CI automation:
 - `.github/workflows/ci.yml` runs lint (`ruff`, `pre-commit`), tests (3.11/3.12/3.13), package build + `twine check`, `pipx` CLI smoke checks, and repo media guards.
+- `.github/workflows/ci.yml` triggers on pull requests and on pushes to `main` only (avoids duplicate feature-branch push + PR runs).
 - CI uses `uv` for Python dependency installation and includes workflow concurrency cancellation.
 - `.github/workflows/dependency-review.yml` runs dependency risk checks on pull requests.
 - `.github/dependabot.yml` keeps pip and GitHub Actions dependencies updated weekly.
+
+Local quality gates:
+- `.pre-commit-config.yaml` includes a `pre-push` hook that runs `make verify`.
+- Install with `make hooks-install`.
 
 # Data Flow
 ## `data/liked_songs.json`

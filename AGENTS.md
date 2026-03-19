@@ -45,4 +45,7 @@ These instructions apply to this repository.
 
 ## Verification
 - Before claiming completion on behavior changes, run relevant tests (`make test` or targeted unit tests).
+- Before pushing code, run `make verify` (lint + format check + unit tests).
+- Before opening a PR, run `make pr-ready` (alias of `make verify`) to ensure checks are green.
+- Install local hooks with `make hooks-install` so `pre-push` enforces `verify` automatically.
 - If tests are skipped, state that explicitly.
