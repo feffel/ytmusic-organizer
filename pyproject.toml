@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ytmusic-organizer"
-version = "0.1.0"
+version = "0.1.1"
 description = "Organize YouTube Music likes into playlists with guided bootstrap and weekly sync"
 readme = "README.md"
 requires-python = ">=3.11"

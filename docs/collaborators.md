@@ -13,8 +13,8 @@ make demo-check
 ```
 
 Notes:
-- Generated media is not committed.
-- Outputs are produced under ignored artifact paths.
+- Generated media is not committed except for the curated README asset `docs/assets/demo.gif`.
+- `make demo-render` writes ignored outputs under `artifacts/demo/` and refreshes `docs/assets/demo.gif`.
 
 ## Launch Bundle Generation
 

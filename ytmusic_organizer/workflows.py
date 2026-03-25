@@ -346,7 +346,6 @@ def run_demo(
     pause(0.6)
 
     ui.start_step("Auth check")
-    ui.step_detail(f"Workspace: {workspace}")
     ui.step_detail(f"Mode: {selected_mode}")
     ui.step_detail("Checking browser auth file (simulated)...")
     pause(0.8)

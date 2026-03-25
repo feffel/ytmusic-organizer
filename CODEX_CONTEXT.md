@@ -174,7 +174,7 @@ Strict schema checks for plan JSON.
 Prompt rendering, manual JSON input intake, OpenAI API classification.
 
 - `scripts/demo/record.sh`, `scripts/demo/render.sh`, `scripts/demo/validate.sh`
-Demo capture/render/validation helpers. Outputs go to `artifacts/demo/` and are not committed.
+Demo capture/render/validation helpers. `record.sh` records an optional raw cast to ignored `artifacts/demo/`. `render.sh` now renders the scripted demo session with `vhs`, writes ignored outputs under `artifacts/demo/`, and refreshes the tracked README asset at `docs/assets/demo.gif`.
 
 - `scripts/launch/generate.sh`
 Generates launch input bundle (`project-metadata.json`, `CHANGELOG.md`, `stats.json`) in `artifacts/launch/<timestamp>/` for private launch orchestration.
@@ -198,7 +198,7 @@ Current `Makefile` targets are:
 - `make pr-ready` -> alias of `make verify` for PR readiness checks
 - `make hooks-install` -> install local `pre-commit` and `pre-push` hooks
 - `make demo-record` -> record CLI demo cast to ignored artifacts
-- `make demo-render` -> render demo gif/mp4 from cast
+- `make demo-render` -> render demo gif/mp4 from scripted demo session and refresh `docs/assets/demo.gif`
 - `make demo-check` -> fail when `.cast/.gif/.mp4` files are tracked in git
 - `make launch-generate` -> generate launch input bundle under ignored artifacts
 
@@ -207,7 +207,7 @@ Makefile execution detail:
 - `check-venv` guard fails fast with setup instructions if `.venv` is missing; setup guidance installs editable package with dev extras (`pip install -e .[dev]`) so `ruff`/`pre-commit` targets work.
 
 Documentation split:
-- `README.md` is intentionally short and optimized for discoverability + first run.
+- `README.md` is intentionally short and optimized for discoverability + first run, and now embeds the tracked demo asset at `docs/assets/demo.gif`.
 - `docs/reference.md` holds detailed CLI/options/modes/workspace/troubleshooting/development reference.
 - `docs/automation.md` is the integration contract for agents/scripts (non-interactive flags, manual-mode input behavior, JSON output shape).
 - `docs/collaborators.md` is collaborator-only guidance (demo asset generation, launch/release/CI workflow pointers).
