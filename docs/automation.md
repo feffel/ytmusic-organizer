@@ -49,6 +49,7 @@ All mutable state lives in the workspace (`config.toml`, `state.json`, `managed_
   - `ytmo rebuild --non-interactive --mode manual --dry-run --json`
   - `ytmo rebuild --non-interactive --mode api --dry-run --json`
 - Cleanup:
+  - `ytmo cleanup --yes --json`
   - `ytmo cleanup --yes --local-only --json`
   - `ytmo cleanup --dry-run --json`
   - `ytmo cleanup --local-only --dry-run --json`
@@ -69,6 +70,8 @@ Example:
 ```bash
 cat plan.json | ytmo sync --mode manual --non-interactive --json
 ```
+
+The same contract applies to `ytmo setup`, `ytmo sync`, and `ytmo rebuild` when they run in manual mode.
 
 ## JSON Output Contract
 

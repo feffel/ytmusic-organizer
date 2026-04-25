@@ -5,13 +5,14 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e .[dev]
+make hooks-install
 ```
 
 ## Test
 
 ```bash
-python -m unittest discover -s tests -v
+make verify
 ```
 
 ## Guidelines

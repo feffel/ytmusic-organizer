@@ -191,7 +191,6 @@ Current `Makefile` targets are:
 - `make sync` -> `ytmo sync`
 - `make rebuild` -> `ytmo rebuild`
 - `make cleanup` -> `ytmo cleanup`
-- `ytmo demo` -> simulation-only setup walkthrough (`--mode manual|api`), no remote/local side effects
 - `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
 - `make verify` -> run lint (`ruff check`), format check (`ruff format --check`), and unit tests
@@ -201,6 +200,8 @@ Current `Makefile` targets are:
 - `make demo-render` -> render demo gif/mp4 from scripted demo session and refresh `docs/assets/demo.gif`
 - `make demo-check` -> fail when `.cast/.gif/.mp4` files are tracked in git
 - `make launch-generate` -> generate launch input bundle under ignored artifacts
+
+There is no `make demo` target. Use `ytmo demo` directly for the simulation-only walkthrough (`--mode manual|api`), with no remote/local side effects.
 
 Makefile execution detail:
 - All targets run through `.venv/bin/python` and require `.venv` to exist.

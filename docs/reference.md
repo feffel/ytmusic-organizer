@@ -11,12 +11,12 @@ This page keeps detailed usage and maintainer-oriented details out of the main R
 - `ytmo demo [--mode manual|api]`
 - `ytmo stats [--plan PATH]`
 
-Common options:
+Shared options:
 
-- `--workspace` (default: `~/.ytmusic-organizer`)
-- `--json` (machine-readable output)
-- `--dry-run` (non-mutating simulation; may still require auth/network reads)
-- `--version`
+- `--workspace` (default: `~/.ytmusic-organizer`) is available on every subcommand.
+- `--json` is available on `setup`, `sync`, `rebuild`, `cleanup`, and `stats`.
+- `--dry-run` is available on `setup`, `sync`, `rebuild`, and `cleanup`; it may still require auth/network reads.
+- `--version` is top-level only.
 
 ## Modes
 
@@ -26,10 +26,26 @@ Common options:
 - Writes prompt files in workspace:
   - `data/full_reset_prompt_filled.txt`
   - `data/new_songs_prompt_filled.txt`
+- In an interactive terminal, pasted JSON auto-submits once it parses; raw/fenced retries can be submitted with a blank line.
 
 `api` mode:
 - Auto-generates plan JSON through OpenAI API.
 - Requires `OPENAI_API_KEY`.
+
+## Auth Setup
+
+`ytmo setup` creates `browser.json` from pasted browser request headers.
+
+Accepted paste formats:
+- Raw header lines, submitted with one blank line:
+  - `cookie: <value>`
+  - `x-goog-authuser: 1`
+- JSON-style header objects copied from browser tools:
+  - `{"cookie":"<value>","x-goog-authuser":"1",...}`
+
+Required keys:
+- `cookie`
+- `x-goog-authuser`
 
 ## Workspace Artifacts
 
@@ -46,6 +62,8 @@ Primary artifacts:
 - `data/playlist_plan.json`
 - `data/new_plan.json`
 - `data/missing_matches.json`
+
+`ytmo cleanup` removes generated managed artifacts only: `state.json`, `managed_playlists.json`, setup markers, plan/likes/missing-match files, and filled prompt files. It does not remove `config.toml` or `browser.json`.
 
 ## Troubleshooting
 

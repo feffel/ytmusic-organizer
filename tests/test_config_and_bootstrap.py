@@ -167,6 +167,7 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                     raise EOFError from exc
 
             with (
+                patch("ytmusic_organizer.workflows.sys.stdin") as fake_stdin,
                 patch("builtins.input", side_effect=fake_input),
                 patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
                 patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
@@ -181,11 +182,13 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                 ),
                 patch("ytmusic_organizer.workflows.initialize_state", return_value=None),
             ):
+                fake_stdin.isatty.return_value = False
                 run_setup(
                     workspace=workspace,
                     auth_file=None,
                     mode="manual",
                     interactive=True,
+                    emit_ui=False,
                 )
 
             self.assertIn("cookie: a=b; c=d", observed["headers_raw"])
@@ -209,13 +212,18 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                 except StopIteration as exc:
                     raise EOFError from exc
 
-            with patch("builtins.input", side_effect=fake_input):
+            with (
+                patch("ytmusic_organizer.workflows.sys.stdin") as fake_stdin,
+                patch("builtins.input", side_effect=fake_input),
+            ):
+                fake_stdin.isatty.return_value = False
                 with self.assertRaises(RuntimeError) as ctx:
                     run_setup(
                         workspace=workspace,
                         auth_file=None,
                         mode="manual",
                         interactive=True,
+                        emit_ui=False,
                     )
             self.assertIn(
                 "AUTH_HEADERS_INVALID::Missing required header(s): x-goog-authuser",
