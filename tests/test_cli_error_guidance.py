@@ -1,8 +1,11 @@
 import unittest
 from io import StringIO
+from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
-from ytmusic_organizer.cli import build_helpful_error, main
+from ytmusic_organizer.cli import _warn_legacy_root_artifacts, build_helpful_error, main
+from ytmusic_organizer.ui import WizardUI
 
 
 class CliErrorGuidanceTests(unittest.TestCase):
@@ -75,6 +78,22 @@ class CliErrorGuidanceTests(unittest.TestCase):
         self.assertEqual(args[0], "warning")
         self.assertEqual(args[1], "Setup interrupted")
         self.assertTrue(capture.getvalue().startswith("\n"))
+
+    def test_legacy_root_artifact_warning_includes_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp) / "project"
+            workspace = Path(tmp) / "workspace"
+            cwd.mkdir()
+            (cwd / "browser.json").write_text("{}", encoding="utf-8")
+            capture = StringIO()
+            with patch("sys.stdout", capture):
+                _warn_legacy_root_artifacts(
+                    WizardUI(enabled=True, force_tty=False), workspace=workspace, cwd=cwd
+                )
+            output = capture.getvalue()
+            self.assertIn("Active workspace is", output)
+            self.assertIn("Move or delete these old local files if they are stale", output)
+            self.assertIn("pass --workspace", output)
 
 
 if __name__ == "__main__":

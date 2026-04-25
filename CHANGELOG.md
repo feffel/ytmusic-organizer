@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.1] - 2026-04-25
+
+### Changed
+
+- Bump the app and package version to `0.2.1`.
+- Report stats coverage as processed likes divided by the total liked snapshot size.
+
+### Fixed
+
+- Count artists across each full playlist when deriving stats podium labels, while keeping sample songs capped at three.
+
 ## [0.2.0] - 2026-03-25
 
 ### Added

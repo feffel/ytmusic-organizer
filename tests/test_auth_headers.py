@@ -20,6 +20,23 @@ def _reader_from_lines(lines: list[str]):
     return _next_line
 
 
+def _collect_from_fake_non_tty_stdin(lines: list[str]) -> str:
+    line_iter = iter(lines)
+
+    def fake_input(prompt: str = "") -> str:  # noqa: ARG001
+        try:
+            return next(line_iter)
+        except StopIteration as exc:
+            raise EOFError from exc
+
+    with (
+        patch("ytmusic_organizer.workflows.sys.stdin") as fake_stdin,
+        patch("builtins.input", side_effect=fake_input),
+    ):
+        fake_stdin.isatty.return_value = False
+        return _collect_auth_headers_from_stdin(ui=None)
+
+
 class AuthHeaderNormalizationTests(unittest.TestCase):
     def test_accepts_raw_header_lines(self) -> None:
         raw = "\n".join(
@@ -111,7 +128,7 @@ class AuthHeaderNormalizationTests(unittest.TestCase):
         )
 
     def test_collector_json_autocompletes_without_eof(self) -> None:
-        lines = iter(
+        normalized = _collect_from_fake_non_tty_stdin(
             [
                 "{",
                 '  "cookie": "a=b",',
@@ -119,49 +136,29 @@ class AuthHeaderNormalizationTests(unittest.TestCase):
                 "}",
             ]
         )
-
-        def fake_input(prompt: str = "") -> str:  # noqa: ARG001
-            value = next(lines)
-            return value
-
-        with patch("builtins.input", side_effect=fake_input):
-            normalized = _collect_auth_headers_from_stdin(ui=None)
         self.assertIn("cookie: a=b", normalized)
         self.assertIn("x-goog-authuser: 1", normalized)
 
     def test_collector_raw_headers_complete_on_blank_line(self) -> None:
-        lines = iter(
+        normalized = _collect_from_fake_non_tty_stdin(
             [
                 "cookie: a=b",
                 "x-goog-authuser: 1",
                 "",
             ]
         )
-
-        def fake_input(prompt: str = "") -> str:  # noqa: ARG001
-            value = next(lines)
-            return value
-
-        with patch("builtins.input", side_effect=fake_input):
-            normalized = _collect_auth_headers_from_stdin(ui=None)
         self.assertIn("cookie: a=b", normalized)
         self.assertIn("x-goog-authuser: 1", normalized)
 
     def test_collector_incomplete_json_raises_actionable_error(self) -> None:
-        lines = iter(
-            [
-                "{",
-                '  "cookie": "a=b",',
-            ]
-        )
-
-        def fake_input(prompt: str = "") -> str:  # noqa: ARG001
-            try:
-                return next(lines)
-            except StopIteration as exc:
-                raise EOFError from exc
-
-        with patch("builtins.input", side_effect=fake_input):
+        with (
+            patch("ytmusic_organizer.workflows.sys.stdin") as fake_stdin,
+            patch(
+                "builtins.input",
+                side_effect=["{", '  "cookie": "a=b",', EOFError],
+            ),
+        ):
+            fake_stdin.isatty.return_value = False
             with self.assertRaises(RuntimeError) as ctx:
                 _collect_auth_headers_from_stdin(ui=None)
         self.assertIn(
@@ -170,20 +167,13 @@ class AuthHeaderNormalizationTests(unittest.TestCase):
 
     def test_collector_accepts_very_long_cookie_line(self) -> None:
         cookie_value = "x" * 12000
-        lines = iter(
+        normalized = _collect_from_fake_non_tty_stdin(
             [
                 f"cookie: {cookie_value}",
                 "x-goog-authuser: 1",
                 "",
             ]
         )
-
-        def fake_input(prompt: str = "") -> str:  # noqa: ARG001
-            value = next(lines)
-            return value
-
-        with patch("builtins.input", side_effect=fake_input):
-            normalized = _collect_auth_headers_from_stdin(ui=None)
         self.assertIn(f"cookie: {cookie_value}", normalized)
         self.assertIn("x-goog-authuser: 1", normalized)
 

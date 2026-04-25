@@ -85,6 +85,10 @@ class StatsTests(unittest.TestCase):
             workspace = Path(tmp) / "ws"
             data_dir = workspace / "data"
             data_dir.mkdir(parents=True)
+            (workspace / "state.json").write_text(
+                json.dumps({"processed_video_ids": ["vid-1"]}),
+                encoding="utf-8",
+            )
             (data_dir / "liked_songs.json").write_text(
                 json.dumps(
                     [
@@ -94,7 +98,14 @@ class StatsTests(unittest.TestCase):
                             "artists": ["Artist A"],
                             "album": "",
                             "duration": "",
-                        }
+                        },
+                        {
+                            "videoId": "vid-2",
+                            "title": "Song B",
+                            "artists": ["Artist B"],
+                            "album": "",
+                            "duration": "",
+                        },
                     ]
                 ),
                 encoding="utf-8",
@@ -118,6 +129,91 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(result["plan_diagnostics"]["ambiguous"], 0)
             self.assertIn("insights", result)
             self.assertEqual(result["insights"]["plan_playlists"], 1)
+            self.assertEqual(result["insights"]["coverage_ratio"], 0.5)
+            self.assertEqual(result["missing_required_artifacts"], ["config", "managed_playlists"])
+            self.assertEqual(
+                result["artifact_paths"]["missing_matches"], str(data_dir / "missing_matches.json")
+            )
+
+    def test_run_stats_setup_health_ignores_missing_sync_cycle_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            data_dir = workspace / "data"
+            data_dir.mkdir(parents=True)
+            (workspace / "config.toml").write_text(
+                'classification_mode = "manual"\n', encoding="utf-8"
+            )
+            (workspace / "state.json").write_text(
+                json.dumps({"processed_video_ids": ["vid-1"]}),
+                encoding="utf-8",
+            )
+            (workspace / "managed_playlists.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "playlists": [
+                            {"name": "Night Drive", "playlist_id": "pl-1"},
+                            {"name": "Soft Focus", "playlist_id": "pl-2"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "liked_songs.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "videoId": "vid-1",
+                            "title": "Song A",
+                            "artists": ["Artist A"],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "playlist_plan.json").write_text(
+                json.dumps(
+                    {
+                        "playlists": [
+                            {
+                                "name": "Night Drive",
+                                "description": "Late-night synth and neon energy",
+                                "songs": [
+                                    {"title": "Song A", "artist": "Artist A"},
+                                    {"title": "Song B", "artist": "Artist B"},
+                                    {"title": "Song C", "artist": "Artist B"},
+                                    {"title": "Song D", "artist": "Artist C"},
+                                    {"title": "Song E", "artist": "Artist C"},
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_stats(workspace)
+
+            self.assertFalse(result["artifact_presence"]["new_likes"])
+            self.assertFalse(result["artifact_presence"]["new_plan"])
+            self.assertEqual(result["missing_required_artifacts"], [])
+            self.assertEqual(result["managed_playlist_names"], ["Night Drive", "Soft Focus"])
+            self.assertEqual(result["plan_diagnostics"]["status"], "ok")
+            self.assertEqual(
+                result["insights"]["top_playlists"][0],
+                {
+                    "name": "Night Drive",
+                    "songs": 5,
+                    "description": "Late-night synth and neon energy",
+                    "sample_songs": [
+                        "Song A - Artist A",
+                        "Song B - Artist B",
+                        "Song C - Artist B",
+                    ],
+                    "top_artist": "Artist B (2 tracks)",
+                    "runner_up_artist": "Artist C (2 tracks)",
+                },
+            )
 
     def test_run_stats_with_custom_plan_missing_liked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

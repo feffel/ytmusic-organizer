@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 import os
+from collections import Counter
 from pathlib import Path
 import sys
 import tempfile
@@ -1046,6 +1047,7 @@ def _read_json_file(
 def _derive_stats_insights(
     *,
     liked_count: int,
+    processed_count: int,
     managed_count: int,
     pending_count: int,
     validated_plan: dict[str, Any] | None,
@@ -1062,17 +1064,47 @@ def _derive_stats_insights(
                     continue
                 songs = item.get("songs", [])
                 songs_count = len(songs) if isinstance(songs, list) else 0
-                ranked.append({"name": str(item.get("name", "Unnamed")), "songs": songs_count})
+                sample_songs: list[str] = []
+                artist_counts: Counter[str] = Counter()
+                if isinstance(songs, list):
+                    for song in songs:
+                        if not isinstance(song, dict):
+                            continue
+                        title = str(song.get("title", "")).strip()
+                        artist = str(song.get("artist", "")).strip()
+                        if artist:
+                            artist_counts[artist] += 1
+                        if len(sample_songs) < 3:
+                            if title and artist:
+                                sample_songs.append(f"{title} - {artist}")
+                            elif title:
+                                sample_songs.append(title)
+                row = {
+                    "name": str(item.get("name", "Unnamed")),
+                    "songs": songs_count,
+                    "sample_songs": sample_songs,
+                }
+                description = item.get("description")
+                if isinstance(description, str) and description.strip():
+                    row["description"] = description.strip()
+                artist_leaders = sorted(
+                    artist_counts.items(),
+                    key=lambda pair: (-pair[1], pair[0].casefold()),
+                )
+                if artist_leaders:
+                    artist, count = artist_leaders[0]
+                    suffix = "track" if count == 1 else "tracks"
+                    row["top_artist"] = f"{artist} ({count} {suffix})"
+                if len(artist_leaders) > 1:
+                    artist, count = artist_leaders[1]
+                    suffix = "track" if count == 1 else "tracks"
+                    row["runner_up_artist"] = f"{artist} ({count} {suffix})"
+                ranked.append(row)
             ranked.sort(key=lambda row: row["songs"], reverse=True)
             plan_playlists = len(ranked)
             top_playlists = ranked[:3]
 
-    coverage_ratio = 0.0
-    if plan_diagnostics.get("status") == "ok":
-        matched = int(plan_diagnostics.get("matched", 0))
-        missing = int(plan_diagnostics.get("missing", 0))
-        total = matched + missing
-        coverage_ratio = (matched / total) if total else 1.0
+    coverage_ratio = (processed_count / liked_count) if liked_count else 0.0
 
     if liked_count >= 1000:
         collection_shape = "Deep collection"
@@ -1209,8 +1241,34 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         "new_plan": paths.new_plan.exists(),
         "missing_matches": paths.missing_matches.exists(),
     }
+    required_artifact_keys = (
+        "config",
+        "state",
+        "managed_playlists",
+        "liked_songs",
+        "playlist_plan",
+    )
+    missing_required_artifacts = [
+        key for key in required_artifact_keys if not bool(artifact_presence.get(key))
+    ]
+    managed_playlist_names = [
+        str(item.get("name")).strip()
+        for item in playlist_items
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    ]
+    artifact_paths = {
+        "config": str(paths.config),
+        "state": str(paths.state),
+        "managed_playlists": str(paths.managed),
+        "liked_songs": str(paths.liked_songs),
+        "new_likes": str(paths.new_likes),
+        "playlist_plan": str(paths.playlist_plan),
+        "new_plan": str(paths.new_plan),
+        "missing_matches": str(paths.missing_matches),
+    }
     insights = _derive_stats_insights(
         liked_count=len(liked) if isinstance(liked, list) else 0,
+        processed_count=len(processed_ids) if isinstance(processed_ids, list) else 0,
         managed_count=len(playlist_items) if isinstance(playlist_items, list) else 0,
         pending_count=len(new_likes) if isinstance(new_likes, list) else 0,
         validated_plan=validated_plan,
@@ -1225,6 +1283,9 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         "new_likes_pending": len(new_likes) if isinstance(new_likes, list) else 0,
         "liked_snapshot_count": len(liked) if isinstance(liked, list) else 0,
         "artifact_presence": artifact_presence,
+        "artifact_paths": artifact_paths,
+        "missing_required_artifacts": missing_required_artifacts,
+        "managed_playlist_names": managed_playlist_names,
         "plan_diagnostics": plan_diagnostics,
         "insights": insights,
         "warnings": warnings,

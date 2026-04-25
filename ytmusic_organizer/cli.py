@@ -31,7 +31,9 @@ def _warn_legacy_root_artifacts(ui: WizardUI, workspace: Path, cwd: Path) -> Non
         ui.warning(
             "Found older local files in this folder ("
             + ", ".join(found)
-            + f"). Active workspace is {workspace}."
+            + f"). Active workspace is {workspace}. "
+            "Move or delete these old local files if they are stale, or pass "
+            f"--workspace {cwd} if this folder is intentional."
         )
 
 

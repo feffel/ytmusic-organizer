@@ -56,8 +56,8 @@ Flow:
 1. Read local workspace artifacts (`state.json`, managed index, likes snapshots, plans, missing matches).
 2. Run non-failing diagnostics for malformed/missing artifacts.
 3. Optionally validate/diagnose plan quality against `data/liked_songs.json`.
-4. Derive share-oriented local insights (`identity_score`, `top_playlists`, `coverage_ratio`, collection/momentum labels).
-5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Queue & Gaps`, `Health Check`) or plain grouped text when not in TTY.
+4. Derive local insights (`identity_score`, richer top playlist summaries, `coverage_ratio`, collection/momentum labels).
+5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Playlist Standings`) or plain grouped text when not in TTY. Stats output is diagnostics/action oriented; vague narrative rows are intentionally omitted.
 
 Implementation location:
 - Orchestration and insight derivation: `ytmusic_organizer/workflows.py` (`run_stats`)
@@ -191,7 +191,6 @@ Current `Makefile` targets are:
 - `make sync` -> `ytmo sync`
 - `make rebuild` -> `ytmo rebuild`
 - `make cleanup` -> `ytmo cleanup`
-- `ytmo demo` -> simulation-only setup walkthrough (`--mode manual|api`), no remote/local side effects
 - `make stats` -> `ytmo stats` (supports optional `--plan PATH` diagnostics input)
 - `make test` -> run unit tests
 - `make verify` -> run lint (`ruff check`), format check (`ruff format --check`), and unit tests
@@ -201,6 +200,8 @@ Current `Makefile` targets are:
 - `make demo-render` -> render demo gif/mp4 from scripted demo session and refresh `docs/assets/demo.gif`
 - `make demo-check` -> fail when `.cast/.gif/.mp4` files are tracked in git
 - `make launch-generate` -> generate launch input bundle under ignored artifacts
+
+There is no `make demo` target. Use `ytmo demo` directly for the simulation-only walkthrough (`--mode manual|api`), with no remote/local side effects.
 
 Makefile execution detail:
 - All targets run through `.venv/bin/python` and require `.venv` to exist.
@@ -260,7 +261,10 @@ Repository hygiene:
 - Rewritten each apply run with current unresolved mapping items.
 
 ## `run_stats` derived insights
-- `run_stats` now computes local-only derived insight fields: `identity_score`, `plan_playlists`, `top_playlists`, `coverage_ratio`, `collection_shape`, and `pending_momentum`.
+- `run_stats` computes local-only derived insight fields: `identity_score`, `plan_playlists`, `top_playlists`, `coverage_ratio`, `collection_shape`, and `pending_momentum`.
+- `coverage_ratio` means library processing coverage: `processed_likes / liked_snapshot_count` when a liked snapshot exists, otherwise `0.0`.
+- `top_playlists` contains up to three ranked playlist summaries with name, song count, optional description, top artist, runner-up artist, and backward-compatible sample song metadata. Sample songs are capped at three, but artist podium counts scan the full playlist.
+- `run_stats` also includes additive fields for human diagnostics: `artifact_paths`, `missing_required_artifacts`, and `managed_playlist_names`.
 - These are included in command results and power human stats rendering; JSON output remains backward-compatible.
 
 # Safety Rules
@@ -274,7 +278,7 @@ Repository hygiene:
 - Human-facing CLI output uses a TTY-first renderer with guided stepper progress for setup/sync/rebuild/demo, recap cards for command completion, and callout-style confirmations.
 - Human-facing CLI output follows the Neon Stage theme across surfaces while remaining pure CLI (no full-screen TUI): rich mode uses icon-accented lines/cards plus waveform/queue cues and stats-section music markers, while plain mode uses stable ASCII tags so logs stay script-friendly.
 - Human-facing copy includes optional music-inspired microcopy with dry, gentle sarcasm, injected additively only (never replacing actionable core text).
-- Easter-egg microcopy slots: `flow_info`, `flow_success`, `warning_suffix`, `recap_footer`, `stats_narrative`.
+- Easter-egg microcopy slots: `flow_info`, `flow_success`, `warning_suffix`, `recap_footer`, `stats_narrative`. Stats rendering no longer uses `stats_narrative`; the slot remains for backward-compatible internal copy inventory.
 - Microcopy appearance is true-random per eligible slot, default probability `0.12`, configurable via `YTMO_MICROCOPY_PROBABILITY` (or `YTMO_MICROCOPY_PROB`), clamped to `[0.0, 1.0]`.
 - UI theming is now fixed to the `indigo-vinyl` palette by default (no runtime theme knob), keeping contrast stable and avoiding color-state ambiguity across terminals.
 - Top-level CLI interruption handling is traceback-safe: `KeyboardInterrupt`/`EOFError` return user-facing guidance instead of uncaught tracebacks.
@@ -287,7 +291,7 @@ Repository hygiene:
 - Interactive setup mode-selection prompt interruption (Ctrl-C/Ctrl-D) now raises the same setup-specific resume guidance (`Setup was interrupted...`) as later setup steps.
 - Resumable setup now replays previously completed setup steps as numbered `Step n/6 done ...` entries so resumed runs keep accurate step index progression instead of muted `Resuming:` notes.
 - Interactive resumed setup no longer re-prompts for default classification mode when no `--mode` override is passed; it reuses persisted `classification_mode`.
-- Interactive TTY stats output is diagnostics-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (overview), 0.18s (plan/coverage), 0.18s (queue/gaps), 0.12s (health), then frame lock.
+- Interactive TTY stats output is diagnostics-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (overview), 0.18s (plan/coverage), 0.18s (playlist standings), 0.12s (health), then frame lock.
 - Non-TTY output stays deterministic plain text with the same information hierarchy.
 - `--json` output remains machine-stable.
 - `state.json` should only grow during incremental sync; full rebuild intentionally reinitializes it.
@@ -300,7 +304,9 @@ Repository hygiene:
 - Manual-mode dry-run writes prompt text only to temporary files outside workspace and auto-deletes them.
 - `ytmo demo` is always simulation-only: no auth setup, no YTMusic/OpenAI calls, no playlist mutations, and no workspace writes.
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
-- `ytmo stats` human output maps internal plan status codes to friendly labels and keeps diagnostics compact in `Health Footer` (health + status + optional single diagnostics line when issues exist).
+- `ytmo stats` human output maps internal plan status codes to friendly labels and keeps overall status plus diagnostics compact in `Status Overview`.
+- `ytmo stats` health treats only core setup artifacts as required (`config.toml`, `state.json`, `managed_playlists.json`, `data/liked_songs.json`, `data/playlist_plan.json`). Sync-cycle artifacts (`data/new_likes.json`, `data/new_plan.json`, `data/missing_matches.json`) do not make a completed setup appear incomplete.
+- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Playlist Standings` renders top-three playlists as a wrapped three-column podium (`Gold | Silver | Bronze`) with top artist/runner-up artist inside each card and a compact managed-playlist table below it. Sample songs and honorable mentions are intentionally omitted from human stats output.
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
 

@@ -92,4 +92,5 @@ ytmo sync --mode api
 
 - cli and reference details: [docs/reference.md](docs/reference.md)
 - automation integration: [docs/automation.md](docs/automation.md)
+- demo asset workflow: [docs/demo.md](docs/demo.md)
 - collaborator workflows: [docs/collaborators.md](docs/collaborators.md)

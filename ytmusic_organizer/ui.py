@@ -4,6 +4,7 @@ import os
 import random
 import re
 import sys
+import textwrap
 import time
 from typing import Any, Mapping
 
@@ -48,10 +49,9 @@ class WizardUI:
     _ICON_ERROR = "x"
     _WAVE_FRAMES = ("▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█")
     _SECTION_ICONS = {
-        "Identity Hero": "♪",
-        "Shape + Momentum": "♬",
-        "Highlights": "♫",
-        "Health Footer": "♩",
+        "Status Overview": "♪",
+        "Plan & Coverage": "♬",
+        "Playlist Standings": "♫",
     }
 
     _PLAN_STATUS_LABELS = {
@@ -467,10 +467,10 @@ class WizardUI:
         self,
         *,
         plan_status: str,
-        missing_artifacts: list[str],
+        missing_required_artifacts: list[str],
         warnings: list[str],
     ) -> tuple[str, str]:
-        if plan_status == "ok" and not missing_artifacts and not warnings:
+        if plan_status == "ok" and not missing_required_artifacts and not warnings:
             return ("Healthy", "ready for sharing")
         if plan_status == "skipped_missing_plan":
             return ("Needs plan file", "run setup/rebuild to create playlist_plan.json")
@@ -478,43 +478,21 @@ class WizardUI:
             return ("Needs liked snapshot", "export liked songs to compute diagnostics")
         if plan_status in {"invalid_plan", "invalid_liked"}:
             return ("Needs fixes", "repair plan/liked artifacts and rerun stats")
-        if missing_artifacts:
-            return ("Needs setup", "workspace artifacts are incomplete")
+        if missing_required_artifacts:
+            return ("Needs setup", "core setup artifacts are incomplete")
         return (self._human_plan_status(plan_status), "review diagnostics details")
 
-    def _stats_narrative(self, identity_score: int, sparse: bool) -> str:
-        if sparse:
-            base = "Setup in progress. Build your first plan to unlock full identity."
-        elif identity_score >= 85:
-            base = "Curator mode active. This frame is share-ready."
-        elif identity_score >= 60:
-            base = "Your taste profile is coherent and growing."
-        elif identity_score > 0:
-            base = "Momentum building. Keep classifying for stronger identity."
-        else:
-            base = "Your vibe is loading."
-        suffix = self._microcopy_for_slot("stats_narrative")
-        if not suffix:
-            return base
-        return f"{base} {suffix}"
-
-    def _stats_top_playlist_label(self, top_playlists: Any) -> str:
-        if isinstance(top_playlists, list) and top_playlists:
-            top = top_playlists[0]
-            return f"{top.get('name', 'Unnamed')} ({top.get('songs', 0)} songs)"
-        return "No ranked playlists yet"
-
     def _stats_diagnostics_line(
-        self, *, missing_artifacts: list[str], warnings: list[str]
+        self, *, missing_required_artifacts: list[str], warnings: list[str]
     ) -> str | None:
-        if not missing_artifacts and not warnings:
+        if not missing_required_artifacts and not warnings:
             return None
         parts: list[str] = []
-        if missing_artifacts:
-            preview = ", ".join(missing_artifacts[:4])
-            remaining = len(missing_artifacts) - 4
+        if missing_required_artifacts:
+            preview = ", ".join(missing_required_artifacts[:4])
+            remaining = len(missing_required_artifacts) - 4
             suffix = f" (+{remaining} more)" if remaining > 0 else ""
-            parts.append(f"missing {preview}{suffix}")
+            parts.append(f"missing required {preview}{suffix}")
         if warnings:
             lead = warnings[0]
             clipped = f"{lead[:93]}..." if len(lead) > 96 else lead
@@ -523,23 +501,224 @@ class WizardUI:
             parts.append(f"warning {clipped}{suffix}")
         return "; ".join(parts)
 
+    def _split_stats_podium_metrics(
+        self, metrics: list[tuple[str, str, bool]]
+    ) -> tuple[dict[str, dict[str, str]], list[tuple[str, str, bool]]]:
+        podium: dict[str, dict[str, str]] = {
+            "Gold": {},
+            "Silver": {},
+            "Bronze": {},
+        }
+        rest: list[tuple[str, str, bool]] = []
+        current_medal: str | None = None
+        for label, value, accented in metrics:
+            if label.endswith(" podium"):
+                current_medal = label.removesuffix(" podium")
+                podium.setdefault(current_medal, {})["summary"] = value
+                continue
+            if current_medal and label == "Vibe":
+                podium[current_medal]["vibe"] = value
+                continue
+            if current_medal and label == "Top artist":
+                podium[current_medal]["top_artist"] = value
+                continue
+            if current_medal and label == "Runner-up":
+                podium[current_medal]["runner_up"] = value
+                continue
+            current_medal = None
+            rest.append((label, value, accented))
+        return podium, rest
+
+    @staticmethod
+    def _stats_podium_summary_parts(summary: str) -> tuple[str, str]:
+        if " (" not in summary:
+            return summary, ""
+        name, count = summary.rsplit(" (", 1)
+        return name, f"({count}"
+
+    @staticmethod
+    def _wrap_cell(value: str, width: int) -> list[str]:
+        if not value:
+            return [""]
+        return textwrap.wrap(
+            value,
+            width=width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        ) or [""]
+
+    @staticmethod
+    def _wrap_list_items(items: list[str], *, width: int) -> list[str]:
+        lines: list[str] = []
+        current = ""
+        for item in items:
+            if not current:
+                current = item
+                continue
+            candidate = f"{current}, {item}"
+            if len(candidate) <= width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = item
+        if current:
+            lines.append(current)
+        return lines
+
+    @staticmethod
+    def _wrap_text(value: str, *, width: int) -> list[str]:
+        return textwrap.wrap(
+            value,
+            width=width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        ) or [""]
+
+    def _stats_podium_cell(self, value: str, *, width: int, style: str | None) -> str:
+        cell = value.ljust(width)
+        if not style:
+            return cell
+        return f"[{style}]{cell}[/]"
+
+    def _render_stats_podium(
+        self, metrics: list[tuple[str, str, bool]], *, rich: bool
+    ) -> list[str]:
+        podium, rest = self._split_stats_podium_metrics(metrics)
+        width = 26
+        medal_order = ("Gold", "Silver", "Bronze")
+        medal_titles = {
+            "Silver": "SILVER #2",
+            "Gold": "GOLD #1",
+            "Bronze": "BRONZE #3",
+        }
+        medal_colors = {
+            "Gold": "bold #ffd166",
+            "Silver": "bold #cfd6e6",
+            "Bronze": "bold #d08c60",
+        }
+
+        def row(values: list[str], *, color_headers: bool = False) -> str:
+            cells: list[str] = []
+            for medal, value in zip(medal_order, values, strict=True):
+                style = medal_colors[medal] if rich and color_headers else None
+                cells.append(self._stats_podium_cell(value, width=width, style=style))
+            return "│ " + " │ ".join(cells) + " │"
+
+        def wrapped_rows(values: list[str]) -> list[str]:
+            wrapped = [self._wrap_cell(value, width) for value in values]
+            height = max(len(lines) for lines in wrapped)
+            rows: list[str] = []
+            for idx in range(height):
+                rows.append(row([lines[idx] if idx < len(lines) else "" for lines in wrapped]))
+            return rows
+
+        border = "─" * (width + 2)
+        lines = [
+            "┌" + "┬".join([border, border, border]) + "┐",
+            row([medal_titles[medal] for medal in medal_order], color_headers=True),
+        ]
+        names: list[str] = []
+        counts: list[str] = []
+        vibes: list[str] = []
+        top_artists: list[str] = []
+        runner_ups: list[str] = []
+        for medal in medal_order:
+            summary = podium.get(medal, {}).get("summary", "")
+            name, count = self._stats_podium_summary_parts(summary)
+            names.append(name)
+            counts.append(count)
+            vibes.append(podium.get(medal, {}).get("vibe", ""))
+            top_artists.append(podium.get(medal, {}).get("top_artist", ""))
+            runner_ups.append(podium.get(medal, {}).get("runner_up", ""))
+        lines.extend(wrapped_rows(names))
+        lines.extend(wrapped_rows(counts))
+        lines.extend(wrapped_rows(vibes))
+        lines.extend(wrapped_rows([f"Top: {value}" if value else "" for value in top_artists]))
+        lines.extend(wrapped_rows([f"Next: {value}" if value else "" for value in runner_ups]))
+        lines.extend(
+            [
+                "├" + "┼".join([border, border, border]) + "┤",
+                row(["#1", "#2", "#3"], color_headers=True),
+                "└" + "┴".join([border, border, border]) + "┘",
+            ]
+        )
+
+        idx = 0
+        while idx < len(rest):
+            label, value, accented = rest[idx]
+            value_color = self._COLOR_ACCENT if accented else self._COLOR_INFO
+            if label == "Managed playlists":
+                rows: list[str] = []
+                idx += 1
+                while idx < len(rest) and rest[idx][0] == "Managed playlist":
+                    rows.append(rest[idx][1])
+                    idx += 1
+                lines.extend(self._render_managed_playlist_table(value, rows, rich=rich))
+                continue
+            if label == "Managed playlist":
+                idx += 1
+                continue
+            wrapped_lines = self._wrap_text(value, width=72)
+            if rich:
+                styled_value = self._style_paths(wrapped_lines[0])
+                lines.append(
+                    f"[{self._COLOR_SECONDARY}]{label}:[/] [{value_color}]{styled_value}[/]"
+                )
+                for wrapped_line in wrapped_lines[1:]:
+                    lines.append(f"  [{value_color}]{self._style_paths(wrapped_line)}[/]")
+            else:
+                lines.append(f"{label}: {wrapped_lines[0]}")
+                for wrapped_line in wrapped_lines[1:]:
+                    lines.append(f"  {wrapped_line}")
+            idx += 1
+        return lines
+
+    def _render_managed_playlist_table(
+        self, total_label: str, playlist_names: list[str], *, rich: bool
+    ) -> list[str]:
+        if not playlist_names:
+            return [f"Managed playlists: {total_label}"]
+        index_width = max(2, len(str(len(playlist_names))))
+        name_width = 56
+        border = f"├{'─' * (index_width + 2)}┼{'─' * (name_width + 2)}┤"
+        lines = [
+            f"Managed playlists: {total_label}",
+            f"┌{'─' * (index_width + 2)}┬{'─' * (name_width + 2)}┐",
+            f"│ {'#'.ljust(index_width)} │ {'Playlist'.ljust(name_width)} │",
+            border,
+        ]
+        for idx, name in enumerate(playlist_names, start=1):
+            wrapped_name = self._wrap_cell(name, name_width)
+            lines.append(f"│ {str(idx).ljust(index_width)} │ {wrapped_name[0].ljust(name_width)} │")
+            for continuation in wrapped_name[1:]:
+                lines.append(f"│ {' '.ljust(index_width)} │ {continuation.ljust(name_width)} │")
+        lines.append(f"└{'─' * (index_width + 2)}┴{'─' * (name_width + 2)}┘")
+        if not rich:
+            return lines
+        return [
+            self._style_paths(line)
+            if idx == 0
+            else f"[{self._COLOR_INFO}]{self._style_paths(line)}[/]"
+            for idx, line in enumerate(lines)
+        ]
+
     def _build_stats_sections(
         self,
         *,
         identity_score: int,
-        narrative: str,
         sparse: bool,
         collection_shape: str,
         managed_playlists: int,
+        managed_playlist_names: list[str],
         processed_likes: int,
         plan_playlists: int,
         plan_status_raw: str,
         plan_status: str,
         coverage_ratio: float,
-        pending_momentum: str,
         top_playlists: Any,
         pending_likes: int,
         missing_matches: int,
+        missing_matches_path: str | None,
         liked_snapshot: int,
         health_label: str,
         health_note: str,
@@ -547,8 +726,10 @@ class WizardUI:
     ) -> list[tuple[str, list[tuple[str, str, bool]]]]:
         hero: list[tuple[str, str, bool]] = [
             ("Identity score", f"{identity_score}/100", True),
-            ("Narrative", narrative, False),
+            ("Overall status", f"{health_label} - {health_note}", health_label == "Healthy"),
         ]
+        if diagnostics_line:
+            hero.append(("Diagnostics", diagnostics_line, False))
         if not sparse:
             hero.extend(
                 [
@@ -563,49 +744,79 @@ class WizardUI:
             shape.append(("Coverage ratio", f"{coverage_ratio:.0%}", True))
         shape.extend(
             [
-                ("Pending momentum", pending_momentum, False),
                 ("Plan status", plan_status, False),
             ]
         )
 
-        highlights: list[tuple[str, str, bool]] = [
-            ("Top playlist", self._stats_top_playlist_label(top_playlists), False)
-        ]
+        highlights: list[tuple[str, str, bool]] = []
+        if isinstance(top_playlists, list) and top_playlists:
+            podium_labels = ("Gold podium", "Silver podium", "Bronze podium")
+            for idx, playlist in enumerate(top_playlists[:3], start=1):
+                if not isinstance(playlist, Mapping):
+                    continue
+                name = str(playlist.get("name", "Unnamed"))
+                songs = int(playlist.get("songs", 0))
+                label = podium_labels[idx - 1]
+                highlights.append((label, f"{name} ({songs} songs)", False))
+                description = str(playlist.get("description", "")).strip()
+                if description:
+                    highlights.append(("Vibe", description, False))
+                top_artist = str(playlist.get("top_artist", "")).strip()
+                if top_artist:
+                    highlights.append(("Top artist", top_artist, False))
+                runner_up = str(playlist.get("runner_up_artist", "")).strip()
+                if runner_up:
+                    highlights.append(("Runner-up", runner_up, False))
+        else:
+            highlights.append(("Top playlists", "No ranked playlists yet", False))
         if pending_likes > 0 or not sparse:
             highlights.append(("New likes pending", str(pending_likes), pending_likes > 0))
         if missing_matches > 0:
             highlights.append(("Missing matches", str(missing_matches), True))
+            if missing_matches_path:
+                highlights.append(("View missing matches", missing_matches_path, False))
+        if managed_playlist_names:
+            highlights.append(
+                (
+                    "Managed playlists",
+                    f"{len(managed_playlist_names)} total",
+                    False,
+                )
+            )
+            for name in managed_playlist_names:
+                highlights.append(("Managed playlist", name, False))
         if liked_snapshot > 0:
             highlights.append(("Liked snapshot", str(liked_snapshot), True))
-
-        footer: list[tuple[str, str, bool]] = [
-            ("Health", health_label, True),
-            ("Status", health_note, False),
-        ]
-        if diagnostics_line:
-            footer.append(("Diagnostics", diagnostics_line, False))
 
         return [
             ("Status Overview", hero),
             ("Plan & Coverage", shape),
-            ("Queue & Gaps", highlights),
-            ("Health Check", footer),
+            ("Playlist Standings", highlights),
         ]
 
     def _render_stats_canvas(self, sections: list[tuple[str, list[tuple[str, str, bool]]]]) -> str:
         lines: list[str] = []
         separator = f"[{self._COLOR_SECONDARY}]{'─' * 54}[/]"
+        podium_colors = {
+            "Gold podium": "bold #ffd166",
+            "Silver podium": "bold #cfd6e6",
+            "Bronze podium": "bold #d08c60",
+        }
         for idx, (heading, metrics) in enumerate(sections):
             if idx:
                 lines.append(separator)
             icon = self._SECTION_ICONS.get(heading, self._ICON_INFO)
             lines.append(f"[bold {self._COLOR_INFO}]{icon} {heading}[/]")
+            if heading == "Playlist Standings":
+                lines.extend(self._render_stats_podium(metrics, rich=True))
+                continue
             for label, value, accented in metrics:
-                value_color = self._COLOR_ACCENT if accented else self._COLOR_INFO
-                styled_value = self._style_paths(value)
-                lines.append(
-                    f"[{self._COLOR_SECONDARY}]{label}:[/] [{value_color}]{styled_value}[/]"
+                value_color = podium_colors.get(
+                    label, self._COLOR_ACCENT if accented else self._COLOR_INFO
                 )
+                label_color = podium_colors.get(label, self._COLOR_SECONDARY)
+                styled_value = self._style_paths(value)
+                lines.append(f"[{label_color}]{label}:[/] [{value_color}]{styled_value}[/]")
         return "\n".join(lines)
 
     def show_stats(self, result: dict[str, Any]) -> None:
@@ -620,16 +831,35 @@ class WizardUI:
         plan_playlists = int(insights.get("plan_playlists", 0))
         coverage_ratio = float(insights.get("coverage_ratio", 0.0))
         collection_shape = str(insights.get("collection_shape", "Just getting started"))
-        pending_momentum = str(insights.get("pending_momentum", "No pending momentum"))
         top_playlists = insights.get("top_playlists", [])
         processed_likes = int(result.get("processed_likes", 0))
         managed_playlists = int(result.get("managed_playlists", 0))
+        managed_playlist_names = [
+            str(name) for name in result.get("managed_playlist_names", []) if str(name).strip()
+        ]
         pending_likes = int(result.get("new_likes_pending", 0))
         missing_matches = int(result.get("missing_matches", 0))
         liked_snapshot = int(result.get("liked_snapshot_count", 0))
         warnings = [str(item) for item in result.get("warnings", []) if str(item).strip()]
         artifact_presence = result.get("artifact_presence", {})
-        missing_artifacts = [key for key, present in artifact_presence.items() if not bool(present)]
+        missing_required_artifacts = [
+            str(item) for item in result.get("missing_required_artifacts", []) if str(item).strip()
+        ]
+        if not missing_required_artifacts:
+            required_artifact_keys = (
+                "config",
+                "state",
+                "managed_playlists",
+                "liked_songs",
+                "playlist_plan",
+            )
+            missing_required_artifacts = [
+                key for key in required_artifact_keys if not bool(artifact_presence.get(key))
+            ]
+        artifact_paths = result.get("artifact_paths", {})
+        missing_matches_path = None
+        if isinstance(artifact_paths, Mapping):
+            missing_matches_path = str(artifact_paths.get("missing_matches", "")).strip() or None
         sparse = (
             identity_score == 0
             and processed_likes == 0
@@ -638,29 +868,28 @@ class WizardUI:
         )
         health_label, health_note = self._stats_health_summary(
             plan_status=plan_status_raw,
-            missing_artifacts=missing_artifacts,
+            missing_required_artifacts=missing_required_artifacts,
             warnings=warnings,
         )
-        narrative = self._stats_narrative(identity_score, sparse=sparse)
         diagnostics_line = self._stats_diagnostics_line(
-            missing_artifacts=missing_artifacts,
+            missing_required_artifacts=missing_required_artifacts,
             warnings=warnings,
         )
         sections = self._build_stats_sections(
             identity_score=identity_score,
-            narrative=narrative,
             sparse=sparse,
             collection_shape=collection_shape,
             managed_playlists=managed_playlists,
+            managed_playlist_names=managed_playlist_names,
             processed_likes=processed_likes,
             plan_playlists=plan_playlists,
             plan_status_raw=plan_status_raw,
             plan_status=plan_status,
             coverage_ratio=coverage_ratio,
-            pending_momentum=pending_momentum,
             top_playlists=top_playlists,
             pending_likes=pending_likes,
             missing_matches=missing_matches,
+            missing_matches_path=missing_matches_path,
             liked_snapshot=liked_snapshot,
             health_label=health_label,
             health_note=health_note,
@@ -668,7 +897,7 @@ class WizardUI:
         )
 
         if self._rich_tty:
-            reveal_delays = (0.25, 0.18, 0.18, 0.12)
+            reveal_delays = (0.25, 0.18, 0.18)
             if Live:
                 seed = Panel.fit(
                     self._render_stats_canvas(sections[:1]),
@@ -701,5 +930,9 @@ class WizardUI:
 
         for heading, metrics in sections:
             self._plain_heading(heading)
+            if heading == "Playlist Standings":
+                for line in self._render_stats_podium(metrics, rich=False):
+                    print(f"  {line}")
+                continue
             for label, value, _ in metrics:
                 print(f"  {label}: {value}")
