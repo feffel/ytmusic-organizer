@@ -36,11 +36,43 @@ class UISurfaceTests(unittest.TestCase):
             "insights": {
                 "identity_score": 92,
                 "plan_playlists": 7,
-                "top_playlists": [{"name": "Night Drive", "songs": 18}],
+                "top_playlists": [
+                    {
+                        "name": "Night Drive",
+                        "songs": 18,
+                        "description": "Late-night synth and neon energy",
+                        "sample_songs": [
+                            "Song A - Artist A",
+                            "Song B - Artist B",
+                            "Song C - Artist C",
+                        ],
+                    },
+                    {
+                        "name": "Soft Focus",
+                        "songs": 12,
+                        "description": "Quiet songs for concentration",
+                        "sample_songs": ["Song D - Artist D"],
+                    },
+                    {
+                        "name": "Gym",
+                        "songs": 9,
+                        "sample_songs": [],
+                    },
+                ],
                 "coverage_ratio": 0.82,
                 "collection_shape": "Growing catalog",
                 "pending_momentum": "Steady momentum",
             },
+            "artifact_paths": {
+                "missing_matches": "/tmp/ws/data/missing_matches.json",
+            },
+            "missing_required_artifacts": [],
+            "managed_playlist_names": [
+                "Night Drive",
+                "Soft Focus",
+                "Gym",
+                "Sunday",
+            ],
             "warnings": [],
         }
 
@@ -72,6 +104,22 @@ class UISurfaceTests(unittest.TestCase):
         self.assertIn("Queue & Gaps", output)
         self.assertIn("Health Check", output)
         self.assertNotIn("Diagnostics:", output)
+        self.assertNotIn("Narrative:", output)
+        self.assertNotIn("Pending momentum:", output)
+
+    def test_show_stats_plain_mode_shows_missing_match_path_and_playlist_detail(self) -> None:
+        capture = io.StringIO()
+        with patch("sys.stdout", capture):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.show_stats(self._sample_result())
+        output = capture.getvalue()
+        self.assertIn("Missing matches: 3", output)
+        self.assertIn("View missing matches: /tmp/ws/data/missing_matches.json", output)
+        self.assertIn("Top 1: Night Drive (18 songs)", output)
+        self.assertIn("Description: Late-night synth and neon energy", output)
+        self.assertIn("Samples: Song A - Artist A; Song B - Artist B; Song C - Artist C", output)
+        self.assertIn("Top 2: Soft Focus (12 songs)", output)
+        self.assertIn("Managed playlists: 4 total: Night Drive, Soft Focus, Gym, Sunday", output)
 
     def test_show_stats_sparse_mode_de_emphasizes_zeros(self) -> None:
         sparse = self._sample_result()
@@ -81,6 +129,7 @@ class UISurfaceTests(unittest.TestCase):
                 "managed_playlists": 0,
                 "new_likes_pending": 0,
                 "liked_snapshot_count": 0,
+                "managed_playlist_names": [],
             }
         )
         sparse["insights"] = {
@@ -108,13 +157,35 @@ class UISurfaceTests(unittest.TestCase):
             ui.show_stats(sparse)
         output = capture.getvalue()
         self.assertIn("Identity score: 0/100", output)
-        self.assertIn("Setup in progress", output)
         self.assertNotIn("Processed likes: 0", output)
         self.assertNotIn("Managed playlists: 0", output)
         self.assertIn("Health: Needs plan file", output)
         self.assertNotIn("Missing artifacts:", output)
         self.assertNotIn("Warnings:", output)
         self.assertIn("Diagnostics:", output)
+        self.assertNotIn("Narrative:", output)
+        self.assertNotIn("Pending momentum:", output)
+
+    def test_show_stats_does_not_mark_missing_sync_artifacts_as_needing_setup(self) -> None:
+        result = self._sample_result()
+        result["artifact_presence"] = {
+            "config": True,
+            "state": True,
+            "managed_playlists": True,
+            "liked_songs": True,
+            "new_likes": False,
+            "playlist_plan": True,
+            "new_plan": False,
+            "missing_matches": False,
+        }
+        result["missing_required_artifacts"] = []
+        capture = io.StringIO()
+        with patch("sys.stdout", capture):
+            ui = WizardUI(enabled=True, force_tty=False)
+            ui.show_stats(result)
+        output = capture.getvalue()
+        self.assertIn("Health: Healthy", output)
+        self.assertNotIn("Needs setup", output)
 
     def test_replay_completed_step_renders_numbered_done_entry_in_plain_mode(self) -> None:
         capture = io.StringIO()
@@ -208,6 +279,7 @@ class UISurfaceTests(unittest.TestCase):
                 "managed_playlists": 0,
                 "new_likes_pending": 0,
                 "liked_snapshot_count": 338,
+                "managed_playlist_names": [],
             }
         )
         sparse["insights"] = {
@@ -234,7 +306,6 @@ class UISurfaceTests(unittest.TestCase):
             ui = WizardUI(enabled=True, force_tty=False)
             ui.show_stats(sparse)
         output = capture.getvalue()
-        self.assertIn("Setup in progress", output)
         self.assertNotIn("Narrative: Your vibe is loading.", output)
         self.assertNotIn("Managed playlists: 0", output)
         self.assertNotIn("Processed likes: 0", output)

@@ -1062,7 +1062,28 @@ def _derive_stats_insights(
                     continue
                 songs = item.get("songs", [])
                 songs_count = len(songs) if isinstance(songs, list) else 0
-                ranked.append({"name": str(item.get("name", "Unnamed")), "songs": songs_count})
+                sample_songs: list[str] = []
+                if isinstance(songs, list):
+                    for song in songs:
+                        if not isinstance(song, dict):
+                            continue
+                        title = str(song.get("title", "")).strip()
+                        artist = str(song.get("artist", "")).strip()
+                        if title and artist:
+                            sample_songs.append(f"{title} - {artist}")
+                        elif title:
+                            sample_songs.append(title)
+                        if len(sample_songs) == 3:
+                            break
+                row = {
+                    "name": str(item.get("name", "Unnamed")),
+                    "songs": songs_count,
+                    "sample_songs": sample_songs,
+                }
+                description = item.get("description")
+                if isinstance(description, str) and description.strip():
+                    row["description"] = description.strip()
+                ranked.append(row)
             ranked.sort(key=lambda row: row["songs"], reverse=True)
             plan_playlists = len(ranked)
             top_playlists = ranked[:3]
@@ -1209,6 +1230,31 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         "new_plan": paths.new_plan.exists(),
         "missing_matches": paths.missing_matches.exists(),
     }
+    required_artifact_keys = (
+        "config",
+        "state",
+        "managed_playlists",
+        "liked_songs",
+        "playlist_plan",
+    )
+    missing_required_artifacts = [
+        key for key in required_artifact_keys if not bool(artifact_presence.get(key))
+    ]
+    managed_playlist_names = [
+        str(item.get("name")).strip()
+        for item in playlist_items
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    ]
+    artifact_paths = {
+        "config": str(paths.config),
+        "state": str(paths.state),
+        "managed_playlists": str(paths.managed),
+        "liked_songs": str(paths.liked_songs),
+        "new_likes": str(paths.new_likes),
+        "playlist_plan": str(paths.playlist_plan),
+        "new_plan": str(paths.new_plan),
+        "missing_matches": str(paths.missing_matches),
+    }
     insights = _derive_stats_insights(
         liked_count=len(liked) if isinstance(liked, list) else 0,
         managed_count=len(playlist_items) if isinstance(playlist_items, list) else 0,
@@ -1225,6 +1271,9 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
         "new_likes_pending": len(new_likes) if isinstance(new_likes, list) else 0,
         "liked_snapshot_count": len(liked) if isinstance(liked, list) else 0,
         "artifact_presence": artifact_presence,
+        "artifact_paths": artifact_paths,
+        "missing_required_artifacts": missing_required_artifacts,
+        "managed_playlist_names": managed_playlist_names,
         "plan_diagnostics": plan_diagnostics,
         "insights": insights,
         "warnings": warnings,

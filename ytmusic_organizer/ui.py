@@ -467,10 +467,10 @@ class WizardUI:
         self,
         *,
         plan_status: str,
-        missing_artifacts: list[str],
+        missing_required_artifacts: list[str],
         warnings: list[str],
     ) -> tuple[str, str]:
-        if plan_status == "ok" and not missing_artifacts and not warnings:
+        if plan_status == "ok" and not missing_required_artifacts and not warnings:
             return ("Healthy", "ready for sharing")
         if plan_status == "skipped_missing_plan":
             return ("Needs plan file", "run setup/rebuild to create playlist_plan.json")
@@ -478,43 +478,21 @@ class WizardUI:
             return ("Needs liked snapshot", "export liked songs to compute diagnostics")
         if plan_status in {"invalid_plan", "invalid_liked"}:
             return ("Needs fixes", "repair plan/liked artifacts and rerun stats")
-        if missing_artifacts:
-            return ("Needs setup", "workspace artifacts are incomplete")
+        if missing_required_artifacts:
+            return ("Needs setup", "core setup artifacts are incomplete")
         return (self._human_plan_status(plan_status), "review diagnostics details")
 
-    def _stats_narrative(self, identity_score: int, sparse: bool) -> str:
-        if sparse:
-            base = "Setup in progress. Build your first plan to unlock full identity."
-        elif identity_score >= 85:
-            base = "Curator mode active. This frame is share-ready."
-        elif identity_score >= 60:
-            base = "Your taste profile is coherent and growing."
-        elif identity_score > 0:
-            base = "Momentum building. Keep classifying for stronger identity."
-        else:
-            base = "Your vibe is loading."
-        suffix = self._microcopy_for_slot("stats_narrative")
-        if not suffix:
-            return base
-        return f"{base} {suffix}"
-
-    def _stats_top_playlist_label(self, top_playlists: Any) -> str:
-        if isinstance(top_playlists, list) and top_playlists:
-            top = top_playlists[0]
-            return f"{top.get('name', 'Unnamed')} ({top.get('songs', 0)} songs)"
-        return "No ranked playlists yet"
-
     def _stats_diagnostics_line(
-        self, *, missing_artifacts: list[str], warnings: list[str]
+        self, *, missing_required_artifacts: list[str], warnings: list[str]
     ) -> str | None:
-        if not missing_artifacts and not warnings:
+        if not missing_required_artifacts and not warnings:
             return None
         parts: list[str] = []
-        if missing_artifacts:
-            preview = ", ".join(missing_artifacts[:4])
-            remaining = len(missing_artifacts) - 4
+        if missing_required_artifacts:
+            preview = ", ".join(missing_required_artifacts[:4])
+            remaining = len(missing_required_artifacts) - 4
             suffix = f" (+{remaining} more)" if remaining > 0 else ""
-            parts.append(f"missing {preview}{suffix}")
+            parts.append(f"missing required {preview}{suffix}")
         if warnings:
             lead = warnings[0]
             clipped = f"{lead[:93]}..." if len(lead) > 96 else lead
@@ -527,19 +505,19 @@ class WizardUI:
         self,
         *,
         identity_score: int,
-        narrative: str,
         sparse: bool,
         collection_shape: str,
         managed_playlists: int,
+        managed_playlist_names: list[str],
         processed_likes: int,
         plan_playlists: int,
         plan_status_raw: str,
         plan_status: str,
         coverage_ratio: float,
-        pending_momentum: str,
         top_playlists: Any,
         pending_likes: int,
         missing_matches: int,
+        missing_matches_path: str | None,
         liked_snapshot: int,
         health_label: str,
         health_note: str,
@@ -547,7 +525,6 @@ class WizardUI:
     ) -> list[tuple[str, list[tuple[str, str, bool]]]]:
         hero: list[tuple[str, str, bool]] = [
             ("Identity score", f"{identity_score}/100", True),
-            ("Narrative", narrative, False),
         ]
         if not sparse:
             hero.extend(
@@ -563,18 +540,41 @@ class WizardUI:
             shape.append(("Coverage ratio", f"{coverage_ratio:.0%}", True))
         shape.extend(
             [
-                ("Pending momentum", pending_momentum, False),
                 ("Plan status", plan_status, False),
             ]
         )
 
-        highlights: list[tuple[str, str, bool]] = [
-            ("Top playlist", self._stats_top_playlist_label(top_playlists), False)
-        ]
+        highlights: list[tuple[str, str, bool]] = []
+        if isinstance(top_playlists, list) and top_playlists:
+            for idx, playlist in enumerate(top_playlists[:3], start=1):
+                if not isinstance(playlist, Mapping):
+                    continue
+                name = str(playlist.get("name", "Unnamed"))
+                songs = int(playlist.get("songs", 0))
+                highlights.append((f"Top {idx}", f"{name} ({songs} songs)", False))
+                description = str(playlist.get("description", "")).strip()
+                if description:
+                    highlights.append(("Description", description, False))
+                sample_songs = playlist.get("sample_songs", [])
+                if isinstance(sample_songs, list) and sample_songs:
+                    samples = "; ".join(str(song) for song in sample_songs[:3])
+                    highlights.append(("Samples", samples, False))
+        else:
+            highlights.append(("Top playlists", "No ranked playlists yet", False))
         if pending_likes > 0 or not sparse:
             highlights.append(("New likes pending", str(pending_likes), pending_likes > 0))
         if missing_matches > 0:
             highlights.append(("Missing matches", str(missing_matches), True))
+            if missing_matches_path:
+                highlights.append(("View missing matches", missing_matches_path, False))
+        if managed_playlist_names:
+            highlights.append(
+                (
+                    "Managed playlists",
+                    f"{len(managed_playlist_names)} total: {', '.join(managed_playlist_names)}",
+                    False,
+                )
+            )
         if liked_snapshot > 0:
             highlights.append(("Liked snapshot", str(liked_snapshot), True))
 
@@ -620,16 +620,35 @@ class WizardUI:
         plan_playlists = int(insights.get("plan_playlists", 0))
         coverage_ratio = float(insights.get("coverage_ratio", 0.0))
         collection_shape = str(insights.get("collection_shape", "Just getting started"))
-        pending_momentum = str(insights.get("pending_momentum", "No pending momentum"))
         top_playlists = insights.get("top_playlists", [])
         processed_likes = int(result.get("processed_likes", 0))
         managed_playlists = int(result.get("managed_playlists", 0))
+        managed_playlist_names = [
+            str(name) for name in result.get("managed_playlist_names", []) if str(name).strip()
+        ]
         pending_likes = int(result.get("new_likes_pending", 0))
         missing_matches = int(result.get("missing_matches", 0))
         liked_snapshot = int(result.get("liked_snapshot_count", 0))
         warnings = [str(item) for item in result.get("warnings", []) if str(item).strip()]
         artifact_presence = result.get("artifact_presence", {})
-        missing_artifacts = [key for key, present in artifact_presence.items() if not bool(present)]
+        missing_required_artifacts = [
+            str(item) for item in result.get("missing_required_artifacts", []) if str(item).strip()
+        ]
+        if not missing_required_artifacts:
+            required_artifact_keys = (
+                "config",
+                "state",
+                "managed_playlists",
+                "liked_songs",
+                "playlist_plan",
+            )
+            missing_required_artifacts = [
+                key for key in required_artifact_keys if not bool(artifact_presence.get(key))
+            ]
+        artifact_paths = result.get("artifact_paths", {})
+        missing_matches_path = None
+        if isinstance(artifact_paths, Mapping):
+            missing_matches_path = str(artifact_paths.get("missing_matches", "")).strip() or None
         sparse = (
             identity_score == 0
             and processed_likes == 0
@@ -638,29 +657,28 @@ class WizardUI:
         )
         health_label, health_note = self._stats_health_summary(
             plan_status=plan_status_raw,
-            missing_artifacts=missing_artifacts,
+            missing_required_artifacts=missing_required_artifacts,
             warnings=warnings,
         )
-        narrative = self._stats_narrative(identity_score, sparse=sparse)
         diagnostics_line = self._stats_diagnostics_line(
-            missing_artifacts=missing_artifacts,
+            missing_required_artifacts=missing_required_artifacts,
             warnings=warnings,
         )
         sections = self._build_stats_sections(
             identity_score=identity_score,
-            narrative=narrative,
             sparse=sparse,
             collection_shape=collection_shape,
             managed_playlists=managed_playlists,
+            managed_playlist_names=managed_playlist_names,
             processed_likes=processed_likes,
             plan_playlists=plan_playlists,
             plan_status_raw=plan_status_raw,
             plan_status=plan_status,
             coverage_ratio=coverage_ratio,
-            pending_momentum=pending_momentum,
             top_playlists=top_playlists,
             pending_likes=pending_likes,
             missing_matches=missing_matches,
+            missing_matches_path=missing_matches_path,
             liked_snapshot=liked_snapshot,
             health_label=health_label,
             health_note=health_note,

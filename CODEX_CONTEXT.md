@@ -56,8 +56,8 @@ Flow:
 1. Read local workspace artifacts (`state.json`, managed index, likes snapshots, plans, missing matches).
 2. Run non-failing diagnostics for malformed/missing artifacts.
 3. Optionally validate/diagnose plan quality against `data/liked_songs.json`.
-4. Derive share-oriented local insights (`identity_score`, `top_playlists`, `coverage_ratio`, collection/momentum labels).
-5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Queue & Gaps`, `Health Check`) or plain grouped text when not in TTY.
+4. Derive local insights (`identity_score`, richer top playlist summaries, `coverage_ratio`, collection/momentum labels).
+5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Queue & Gaps`, `Health Check`) or plain grouped text when not in TTY. Stats output is diagnostics/action oriented; vague narrative rows are intentionally omitted.
 
 Implementation location:
 - Orchestration and insight derivation: `ytmusic_organizer/workflows.py` (`run_stats`)
@@ -260,7 +260,9 @@ Repository hygiene:
 - Rewritten each apply run with current unresolved mapping items.
 
 ## `run_stats` derived insights
-- `run_stats` now computes local-only derived insight fields: `identity_score`, `plan_playlists`, `top_playlists`, `coverage_ratio`, `collection_shape`, and `pending_momentum`.
+- `run_stats` computes local-only derived insight fields: `identity_score`, `plan_playlists`, `top_playlists`, `coverage_ratio`, `collection_shape`, and `pending_momentum`.
+- `top_playlists` contains up to three ranked playlist summaries with name, song count, optional description, and up to three sample songs.
+- `run_stats` also includes additive fields for human diagnostics: `artifact_paths`, `missing_required_artifacts`, and `managed_playlist_names`.
 - These are included in command results and power human stats rendering; JSON output remains backward-compatible.
 
 # Safety Rules
@@ -274,7 +276,7 @@ Repository hygiene:
 - Human-facing CLI output uses a TTY-first renderer with guided stepper progress for setup/sync/rebuild/demo, recap cards for command completion, and callout-style confirmations.
 - Human-facing CLI output follows the Neon Stage theme across surfaces while remaining pure CLI (no full-screen TUI): rich mode uses icon-accented lines/cards plus waveform/queue cues and stats-section music markers, while plain mode uses stable ASCII tags so logs stay script-friendly.
 - Human-facing copy includes optional music-inspired microcopy with dry, gentle sarcasm, injected additively only (never replacing actionable core text).
-- Easter-egg microcopy slots: `flow_info`, `flow_success`, `warning_suffix`, `recap_footer`, `stats_narrative`.
+- Easter-egg microcopy slots: `flow_info`, `flow_success`, `warning_suffix`, `recap_footer`, `stats_narrative`. Stats rendering no longer uses `stats_narrative`; the slot remains for backward-compatible internal copy inventory.
 - Microcopy appearance is true-random per eligible slot, default probability `0.12`, configurable via `YTMO_MICROCOPY_PROBABILITY` (or `YTMO_MICROCOPY_PROB`), clamped to `[0.0, 1.0]`.
 - UI theming is now fixed to the `indigo-vinyl` palette by default (no runtime theme knob), keeping contrast stable and avoiding color-state ambiguity across terminals.
 - Top-level CLI interruption handling is traceback-safe: `KeyboardInterrupt`/`EOFError` return user-facing guidance instead of uncaught tracebacks.
@@ -300,7 +302,9 @@ Repository hygiene:
 - Manual-mode dry-run writes prompt text only to temporary files outside workspace and auto-deletes them.
 - `ytmo demo` is always simulation-only: no auth setup, no YTMusic/OpenAI calls, no playlist mutations, and no workspace writes.
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
-- `ytmo stats` human output maps internal plan status codes to friendly labels and keeps diagnostics compact in `Health Footer` (health + status + optional single diagnostics line when issues exist).
+- `ytmo stats` human output maps internal plan status codes to friendly labels and keeps diagnostics compact in `Health Check` (health + status + optional single diagnostics line when issues exist).
+- `ytmo stats` health treats only core setup artifacts as required (`config.toml`, `state.json`, `managed_playlists.json`, `data/liked_songs.json`, `data/playlist_plan.json`). Sync-cycle artifacts (`data/new_likes.json`, `data/new_plan.json`, `data/missing_matches.json`) do not make a completed setup appear incomplete.
+- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Queue & Gaps` shows detailed top-three playlist summaries plus a compact managed-playlist list.
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
 
