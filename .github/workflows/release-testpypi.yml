@@ -25,6 +25,7 @@ jobs:
 
       - name: Build package
         run: |
+          rm -rf dist build
           uv pip install --system build twine
           python -m build
           twine check dist/*
