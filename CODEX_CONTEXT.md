@@ -261,7 +261,8 @@ Repository hygiene:
 
 ## `run_stats` derived insights
 - `run_stats` computes local-only derived insight fields: `identity_score`, `plan_playlists`, `top_playlists`, `coverage_ratio`, `collection_shape`, and `pending_momentum`.
-- `top_playlists` contains up to three ranked playlist summaries with name, song count, optional description, top artist, runner-up artist, and backward-compatible sample song metadata.
+- `coverage_ratio` means library processing coverage: `processed_likes / liked_snapshot_count` when a liked snapshot exists, otherwise `0.0`.
+- `top_playlists` contains up to three ranked playlist summaries with name, song count, optional description, top artist, runner-up artist, and backward-compatible sample song metadata. Sample songs are capped at three, but artist podium counts scan the full playlist.
 - `run_stats` also includes additive fields for human diagnostics: `artifact_paths`, `missing_required_artifacts`, and `managed_playlist_names`.
 - These are included in command results and power human stats rendering; JSON output remains backward-compatible.
 

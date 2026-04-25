@@ -1047,6 +1047,7 @@ def _read_json_file(
 def _derive_stats_insights(
     *,
     liked_count: int,
+    processed_count: int,
     managed_count: int,
     pending_count: int,
     validated_plan: dict[str, Any] | None,
@@ -1073,12 +1074,11 @@ def _derive_stats_insights(
                         artist = str(song.get("artist", "")).strip()
                         if artist:
                             artist_counts[artist] += 1
-                        if title and artist:
-                            sample_songs.append(f"{title} - {artist}")
-                        elif title:
-                            sample_songs.append(title)
-                        if len(sample_songs) == 3:
-                            break
+                        if len(sample_songs) < 3:
+                            if title and artist:
+                                sample_songs.append(f"{title} - {artist}")
+                            elif title:
+                                sample_songs.append(title)
                 row = {
                     "name": str(item.get("name", "Unnamed")),
                     "songs": songs_count,
@@ -1104,12 +1104,7 @@ def _derive_stats_insights(
             plan_playlists = len(ranked)
             top_playlists = ranked[:3]
 
-    coverage_ratio = 0.0
-    if plan_diagnostics.get("status") == "ok":
-        matched = int(plan_diagnostics.get("matched", 0))
-        missing = int(plan_diagnostics.get("missing", 0))
-        total = matched + missing
-        coverage_ratio = (matched / total) if total else 1.0
+    coverage_ratio = (processed_count / liked_count) if liked_count else 0.0
 
     if liked_count >= 1000:
         collection_shape = "Deep collection"
@@ -1273,6 +1268,7 @@ def run_stats(workspace: Path, plan_path: Path | None = None) -> dict[str, Any]:
     }
     insights = _derive_stats_insights(
         liked_count=len(liked) if isinstance(liked, list) else 0,
+        processed_count=len(processed_ids) if isinstance(processed_ids, list) else 0,
         managed_count=len(playlist_items) if isinstance(playlist_items, list) else 0,
         pending_count=len(new_likes) if isinstance(new_likes, list) else 0,
         validated_plan=validated_plan,

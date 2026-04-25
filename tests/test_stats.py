@@ -85,6 +85,10 @@ class StatsTests(unittest.TestCase):
             workspace = Path(tmp) / "ws"
             data_dir = workspace / "data"
             data_dir.mkdir(parents=True)
+            (workspace / "state.json").write_text(
+                json.dumps({"processed_video_ids": ["vid-1"]}),
+                encoding="utf-8",
+            )
             (data_dir / "liked_songs.json").write_text(
                 json.dumps(
                     [
@@ -94,7 +98,14 @@ class StatsTests(unittest.TestCase):
                             "artists": ["Artist A"],
                             "album": "",
                             "duration": "",
-                        }
+                        },
+                        {
+                            "videoId": "vid-2",
+                            "title": "Song B",
+                            "artists": ["Artist B"],
+                            "album": "",
+                            "duration": "",
+                        },
                     ]
                 ),
                 encoding="utf-8",
@@ -118,9 +129,8 @@ class StatsTests(unittest.TestCase):
             self.assertEqual(result["plan_diagnostics"]["ambiguous"], 0)
             self.assertIn("insights", result)
             self.assertEqual(result["insights"]["plan_playlists"], 1)
-            self.assertEqual(
-                result["missing_required_artifacts"], ["config", "state", "managed_playlists"]
-            )
+            self.assertEqual(result["insights"]["coverage_ratio"], 0.5)
+            self.assertEqual(result["missing_required_artifacts"], ["config", "managed_playlists"])
             self.assertEqual(
                 result["artifact_paths"]["missing_matches"], str(data_dir / "missing_matches.json")
             )
@@ -170,9 +180,10 @@ class StatsTests(unittest.TestCase):
                                 "description": "Late-night synth and neon energy",
                                 "songs": [
                                     {"title": "Song A", "artist": "Artist A"},
-                                    {"title": "Song B", "artist": "Artist A"},
+                                    {"title": "Song B", "artist": "Artist B"},
                                     {"title": "Song C", "artist": "Artist B"},
                                     {"title": "Song D", "artist": "Artist C"},
+                                    {"title": "Song E", "artist": "Artist C"},
                                 ],
                             }
                         ]
@@ -192,15 +203,15 @@ class StatsTests(unittest.TestCase):
                 result["insights"]["top_playlists"][0],
                 {
                     "name": "Night Drive",
-                    "songs": 4,
+                    "songs": 5,
                     "description": "Late-night synth and neon energy",
                     "sample_songs": [
                         "Song A - Artist A",
-                        "Song B - Artist A",
+                        "Song B - Artist B",
                         "Song C - Artist B",
                     ],
-                    "top_artist": "Artist A (2 tracks)",
-                    "runner_up_artist": "Artist B (1 track)",
+                    "top_artist": "Artist B (2 tracks)",
+                    "runner_up_artist": "Artist C (2 tracks)",
                 },
             )
 
