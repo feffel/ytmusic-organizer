@@ -170,9 +170,9 @@ class StatsTests(unittest.TestCase):
                                 "description": "Late-night synth and neon energy",
                                 "songs": [
                                     {"title": "Song A", "artist": "Artist A"},
-                                    {"title": "Song B", "artist": "Artist B"},
-                                    {"title": "Song C", "artist": "Artist C"},
-                                    {"title": "Song D", "artist": "Artist D"},
+                                    {"title": "Song B", "artist": "Artist A"},
+                                    {"title": "Song C", "artist": "Artist B"},
+                                    {"title": "Song D", "artist": "Artist C"},
                                 ],
                             }
                         ]
@@ -196,9 +196,11 @@ class StatsTests(unittest.TestCase):
                     "description": "Late-night synth and neon energy",
                     "sample_songs": [
                         "Song A - Artist A",
-                        "Song B - Artist B",
-                        "Song C - Artist C",
+                        "Song B - Artist A",
+                        "Song C - Artist B",
                     ],
+                    "top_artist": "Artist A (2 tracks)",
+                    "runner_up_artist": "Artist B (1 track)",
                 },
             )
 

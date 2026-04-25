@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 import os
+from collections import Counter
 from pathlib import Path
 import sys
 import tempfile
@@ -1063,12 +1064,15 @@ def _derive_stats_insights(
                 songs = item.get("songs", [])
                 songs_count = len(songs) if isinstance(songs, list) else 0
                 sample_songs: list[str] = []
+                artist_counts: Counter[str] = Counter()
                 if isinstance(songs, list):
                     for song in songs:
                         if not isinstance(song, dict):
                             continue
                         title = str(song.get("title", "")).strip()
                         artist = str(song.get("artist", "")).strip()
+                        if artist:
+                            artist_counts[artist] += 1
                         if title and artist:
                             sample_songs.append(f"{title} - {artist}")
                         elif title:
@@ -1083,6 +1087,18 @@ def _derive_stats_insights(
                 description = item.get("description")
                 if isinstance(description, str) and description.strip():
                     row["description"] = description.strip()
+                artist_leaders = sorted(
+                    artist_counts.items(),
+                    key=lambda pair: (-pair[1], pair[0].casefold()),
+                )
+                if artist_leaders:
+                    artist, count = artist_leaders[0]
+                    suffix = "track" if count == 1 else "tracks"
+                    row["top_artist"] = f"{artist} ({count} {suffix})"
+                if len(artist_leaders) > 1:
+                    artist, count = artist_leaders[1]
+                    suffix = "track" if count == 1 else "tracks"
+                    row["runner_up_artist"] = f"{artist} ({count} {suffix})"
                 ranked.append(row)
             ranked.sort(key=lambda row: row["songs"], reverse=True)
             plan_playlists = len(ranked)

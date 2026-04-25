@@ -41,6 +41,8 @@ class UISurfaceTests(unittest.TestCase):
                         "name": "Night Drive",
                         "songs": 18,
                         "description": "Late-night synth and neon energy",
+                        "top_artist": "Artist A (2 tracks)",
+                        "runner_up_artist": "Artist B (1 track)",
                         "sample_songs": [
                             "Song A - Artist A",
                             "Song B - Artist B",
@@ -51,6 +53,7 @@ class UISurfaceTests(unittest.TestCase):
                         "name": "Soft Focus",
                         "songs": 12,
                         "description": "Quiet songs for concentration",
+                        "top_artist": "Artist D (1 track)",
                         "sample_songs": ["Song D - Artist D"],
                     },
                     {
@@ -83,18 +86,23 @@ class UISurfaceTests(unittest.TestCase):
                 "name": "Arabic Pop / Mainstream / Levant Favorites",
                 "songs": 31,
                 "description": "Mainstream Arabic pop, nostalgic radio hits, and polished Levant hooks",
+                "top_artist": "Fairuz (8 tracks)",
+                "runner_up_artist": "Amr Diab (6 tracks)",
                 "sample_songs": ["Habibi - Artist One", "Yalla - Artist Two"],
             },
             {
                 "name": "Covers / Comedy / Internet Deep Cuts",
                 "songs": 28,
                 "description": "Arabic rap, trap, mahraganat, internet jokes, and viral oddities",
+                "top_artist": "Wegz (5 tracks)",
+                "runner_up_artist": "Marwan Pablo (4 tracks)",
                 "sample_songs": ["Cover One - Artist Three"],
             },
             {
                 "name": "Arabic Rap / Trap / Mahraganat Energy",
                 "songs": 21,
                 "description": "Covers, comedy, internet-era edits, and personality-heavy tracks",
+                "top_artist": "El Joker (4 tracks)",
                 "sample_songs": [],
             },
         ]
@@ -157,18 +165,19 @@ class UISurfaceTests(unittest.TestCase):
         self.assertIn("SILVER #2", output)
         self.assertIn("GOLD #1", output)
         self.assertIn("BRONZE #3", output)
-        self.assertLess(output.index("SILVER #2"), output.index("GOLD #1"))
-        self.assertLess(output.index("GOLD #1"), output.index("BRONZE #3"))
+        self.assertLess(output.index("GOLD #1"), output.index("SILVER #2"))
+        self.assertLess(output.index("SILVER #2"), output.index("BRONZE #3"))
         self.assertIn("│ Soft Focus", output)
         self.assertIn("│ Night Drive", output)
         self.assertIn("│ Gym", output)
         self.assertIn("Late-night synth", output)
-        self.assertIn(
-            "Gold samples: Song A - Artist A; Song B - Artist B; Song C - Artist C",
-            output,
-        )
-        self.assertIn("Honorable mentions: Sunday", output)
+        self.assertIn("Artist A (2 tracks)", output)
+        self.assertIn("Artist B (1 track)", output)
+        self.assertNotIn("samples:", output.lower())
+        self.assertNotIn("Honorable mentions", output)
         self.assertIn("Managed playlists: 4 total", output)
+        self.assertIn("│ 1  │ Night Drive", output)
+        self.assertIn("│ 4  │ Sunday", output)
         self.assertNotIn("████", output)
         self.assertNotIn("…", output)
 
@@ -185,11 +194,15 @@ class UISurfaceTests(unittest.TestCase):
         self.assertIn("Deep Cuts", output)
         self.assertIn("Arabic rap, trap,", output)
         self.assertIn("mahraganat", output)
-        self.assertIn("Honorable mentions:", output)
+        self.assertIn("Fairuz (8 tracks)", output)
+        self.assertNotIn("Honorable mentions:", output)
         self.assertIn("Arabic Indie & Alternative", output)
         self.assertIn("Motivation & Abundance", output)
+        managed_section = False
         for line in output.splitlines():
-            if "Honorable mentions:" in line:
+            if "Managed playlists: 12 total" in line:
+                managed_section = True
+            if managed_section and line.strip().startswith("│"):
                 self.assertLessEqual(len(line), 88)
 
     def test_stats_unhealthy_output_collapses_diagnostics_into_status_overview(self) -> None:

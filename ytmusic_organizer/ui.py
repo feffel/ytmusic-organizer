@@ -519,8 +519,11 @@ class WizardUI:
             if current_medal and label == "Vibe":
                 podium[current_medal]["vibe"] = value
                 continue
-            if current_medal and label == "Samples":
-                podium[current_medal]["samples"] = value
+            if current_medal and label == "Top artist":
+                podium[current_medal]["top_artist"] = value
+                continue
+            if current_medal and label == "Runner-up":
+                podium[current_medal]["runner_up"] = value
                 continue
             current_medal = None
             rest.append((label, value, accented))
@@ -532,14 +535,6 @@ class WizardUI:
             return summary, ""
         name, count = summary.rsplit(" (", 1)
         return name, f"({count}"
-
-    @staticmethod
-    def _clip_cell(value: str, width: int) -> str:
-        if len(value) <= width:
-            return value
-        if width <= 1:
-            return value[:width]
-        return value[: width - 1] + "…"
 
     @staticmethod
     def _wrap_cell(value: str, width: int) -> list[str]:
@@ -590,7 +585,7 @@ class WizardUI:
     ) -> list[str]:
         podium, rest = self._split_stats_podium_metrics(metrics)
         width = 26
-        medal_order = ("Silver", "Gold", "Bronze")
+        medal_order = ("Gold", "Silver", "Bronze")
         medal_titles = {
             "Silver": "SILVER #2",
             "Gold": "GOLD #1",
@@ -625,51 +620,45 @@ class WizardUI:
         names: list[str] = []
         counts: list[str] = []
         vibes: list[str] = []
+        top_artists: list[str] = []
+        runner_ups: list[str] = []
         for medal in medal_order:
             summary = podium.get(medal, {}).get("summary", "")
             name, count = self._stats_podium_summary_parts(summary)
             names.append(name)
             counts.append(count)
             vibes.append(podium.get(medal, {}).get("vibe", ""))
+            top_artists.append(podium.get(medal, {}).get("top_artist", ""))
+            runner_ups.append(podium.get(medal, {}).get("runner_up", ""))
         lines.extend(wrapped_rows(names))
         lines.extend(wrapped_rows(counts))
         lines.extend(wrapped_rows(vibes))
+        lines.extend(wrapped_rows([f"Top: {value}" if value else "" for value in top_artists]))
+        lines.extend(wrapped_rows([f"Next: {value}" if value else "" for value in runner_ups]))
         lines.extend(
             [
                 "├" + "┼".join([border, border, border]) + "┤",
-                row(["#2", "#1", "#3"], color_headers=True),
+                row(["#1", "#2", "#3"], color_headers=True),
                 "└" + "┴".join([border, border, border]) + "┘",
             ]
         )
 
-        for medal in ("Gold", "Silver", "Bronze"):
-            samples = podium.get(medal, {}).get("samples", "")
-            if samples:
-                sample_lines = self._wrap_text(samples, width=72)
-                lines.append(f"{medal} samples: {sample_lines[0]}")
-                for sample_line in sample_lines[1:]:
-                    lines.append(f"  {sample_line}")
-
-        for label, value, accented in rest:
+        idx = 0
+        while idx < len(rest):
+            label, value, accented = rest[idx]
             value_color = self._COLOR_ACCENT if accented else self._COLOR_INFO
-            if label == "Honorable mentions":
-                wrapped_lines = self._wrap_list_items(
-                    [item.strip() for item in value.split(",") if item.strip()],
-                    width=66,
-                )
-            elif label == "Managed playlists":
-                prefix, _, names_value = value.partition(": ")
-                if names_value:
-                    wrapped_names = self._wrap_list_items(
-                        [item.strip() for item in names_value.split(",") if item.strip()],
-                        width=66,
-                    )
-                    wrapped_lines = [f"{prefix}: {wrapped_names[0]}"]
-                    wrapped_lines.extend(wrapped_names[1:])
-                else:
-                    wrapped_lines = self._wrap_text(value, width=72)
-            else:
-                wrapped_lines = self._wrap_text(value, width=72)
+            if label == "Managed playlists":
+                rows: list[str] = []
+                idx += 1
+                while idx < len(rest) and rest[idx][0] == "Managed playlist":
+                    rows.append(rest[idx][1])
+                    idx += 1
+                lines.extend(self._render_managed_playlist_table(value, rows, rich=rich))
+                continue
+            if label == "Managed playlist":
+                idx += 1
+                continue
+            wrapped_lines = self._wrap_text(value, width=72)
             if rich:
                 styled_value = self._style_paths(wrapped_lines[0])
                 lines.append(
@@ -681,7 +670,37 @@ class WizardUI:
                 lines.append(f"{label}: {wrapped_lines[0]}")
                 for wrapped_line in wrapped_lines[1:]:
                     lines.append(f"  {wrapped_line}")
+            idx += 1
         return lines
+
+    def _render_managed_playlist_table(
+        self, total_label: str, playlist_names: list[str], *, rich: bool
+    ) -> list[str]:
+        if not playlist_names:
+            return [f"Managed playlists: {total_label}"]
+        index_width = max(2, len(str(len(playlist_names))))
+        name_width = 56
+        border = f"├{'─' * (index_width + 2)}┼{'─' * (name_width + 2)}┤"
+        lines = [
+            f"Managed playlists: {total_label}",
+            f"┌{'─' * (index_width + 2)}┬{'─' * (name_width + 2)}┐",
+            f"│ {'#'.ljust(index_width)} │ {'Playlist'.ljust(name_width)} │",
+            border,
+        ]
+        for idx, name in enumerate(playlist_names, start=1):
+            wrapped_name = self._wrap_cell(name, name_width)
+            lines.append(f"│ {str(idx).ljust(index_width)} │ {wrapped_name[0].ljust(name_width)} │")
+            for continuation in wrapped_name[1:]:
+                lines.append(f"│ {' '.ljust(index_width)} │ {continuation.ljust(name_width)} │")
+        lines.append(f"└{'─' * (index_width + 2)}┴{'─' * (name_width + 2)}┘")
+        if not rich:
+            return lines
+        return [
+            self._style_paths(line)
+            if idx == 0
+            else f"[{self._COLOR_INFO}]{self._style_paths(line)}[/]"
+            for idx, line in enumerate(lines)
+        ]
 
     def _build_stats_sections(
         self,
@@ -732,27 +751,22 @@ class WizardUI:
         highlights: list[tuple[str, str, bool]] = []
         if isinstance(top_playlists, list) and top_playlists:
             podium_labels = ("Gold podium", "Silver podium", "Bronze podium")
-            podium_names: set[str] = set()
             for idx, playlist in enumerate(top_playlists[:3], start=1):
                 if not isinstance(playlist, Mapping):
                     continue
                 name = str(playlist.get("name", "Unnamed"))
-                podium_names.add(name)
                 songs = int(playlist.get("songs", 0))
                 label = podium_labels[idx - 1]
                 highlights.append((label, f"{name} ({songs} songs)", False))
                 description = str(playlist.get("description", "")).strip()
                 if description:
                     highlights.append(("Vibe", description, False))
-                sample_songs = playlist.get("sample_songs", [])
-                if isinstance(sample_songs, list) and sample_songs:
-                    samples = "; ".join(str(song) for song in sample_songs[:3])
-                    highlights.append(("Samples", samples, False))
-            honorable_mentions = [
-                name for name in managed_playlist_names if name and name not in podium_names
-            ]
-            if honorable_mentions:
-                highlights.append(("Honorable mentions", ", ".join(honorable_mentions), False))
+                top_artist = str(playlist.get("top_artist", "")).strip()
+                if top_artist:
+                    highlights.append(("Top artist", top_artist, False))
+                runner_up = str(playlist.get("runner_up_artist", "")).strip()
+                if runner_up:
+                    highlights.append(("Runner-up", runner_up, False))
         else:
             highlights.append(("Top playlists", "No ranked playlists yet", False))
         if pending_likes > 0 or not sparse:
@@ -765,10 +779,12 @@ class WizardUI:
             highlights.append(
                 (
                     "Managed playlists",
-                    f"{len(managed_playlist_names)} total: {', '.join(managed_playlist_names)}",
+                    f"{len(managed_playlist_names)} total",
                     False,
                 )
             )
+            for name in managed_playlist_names:
+                highlights.append(("Managed playlist", name, False))
         if liked_snapshot > 0:
             highlights.append(("Liked snapshot", str(liked_snapshot), True))
 

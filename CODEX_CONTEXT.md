@@ -261,7 +261,7 @@ Repository hygiene:
 
 ## `run_stats` derived insights
 - `run_stats` computes local-only derived insight fields: `identity_score`, `plan_playlists`, `top_playlists`, `coverage_ratio`, `collection_shape`, and `pending_momentum`.
-- `top_playlists` contains up to three ranked playlist summaries with name, song count, optional description, and up to three sample songs.
+- `top_playlists` contains up to three ranked playlist summaries with name, song count, optional description, top artist, runner-up artist, and backward-compatible sample song metadata.
 - `run_stats` also includes additive fields for human diagnostics: `artifact_paths`, `missing_required_artifacts`, and `managed_playlist_names`.
 - These are included in command results and power human stats rendering; JSON output remains backward-compatible.
 
@@ -304,7 +304,7 @@ Repository hygiene:
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
 - `ytmo stats` human output maps internal plan status codes to friendly labels and keeps overall status plus diagnostics compact in `Status Overview`.
 - `ytmo stats` health treats only core setup artifacts as required (`config.toml`, `state.json`, `managed_playlists.json`, `data/liked_songs.json`, `data/playlist_plan.json`). Sync-cycle artifacts (`data/new_likes.json`, `data/new_plan.json`, `data/missing_matches.json`) do not make a completed setup appear incomplete.
-- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Playlist Standings` renders top-three playlists as a wrapped three-column podium (`Silver | Gold | Bronze`) with wrapped samples, honorable mentions, and compact diagnostics below it.
+- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Playlist Standings` renders top-three playlists as a wrapped three-column podium (`Gold | Silver | Bronze`) with top artist/runner-up artist inside each card and a compact managed-playlist table below it. Sample songs and honorable mentions are intentionally omitted from human stats output.
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
 
