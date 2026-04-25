@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Guard tracked demo media
         run: |
-          tracked_media="$(git ls-files '*.cast' '*.gif' '*.mp4')"
+          tracked_media="$(git ls-files '*.cast' '*.gif' '*.mp4' | grep -v '^docs/assets/demo\.gif$' || true)"
           if [ -n "$tracked_media" ]; then
             echo "Tracked media files are not allowed:"
             echo "$tracked_media"

@@ -40,7 +40,7 @@ demo-render:
 	./scripts/demo/render.sh
 
 demo-check:
-	@tracked=$$(git ls-files '*.cast' '*.gif' '*.mp4'); \
+	@tracked=$$(git ls-files '*.cast' '*.gif' '*.mp4' | grep -v '^docs/assets/demo\.gif$$' || true); \
 	if [ -n "$$tracked" ]; then \
 		echo "Tracked media files are not allowed:"; \
 		echo "$$tracked"; \

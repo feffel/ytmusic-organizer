@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PYTHON_BIN="${PYTHON_BIN:-python}"
-WORKSPACE="${WORKSPACE:?WORKSPACE is required}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export PATH="${ROOT_DIR}/.venv/bin:${PATH}"
 
-echo "$ ytmusic-organizer demo session"
-echo "$ ${PYTHON_BIN} -m ytmusic_organizer.cli --help"
-"${PYTHON_BIN}" -m ytmusic_organizer.cli --help
+echo "$ ytmo --help"
+ytmo --help
 echo
-echo "$ ${PYTHON_BIN} -m ytmusic_organizer.cli demo --workspace ${WORKSPACE} --mode manual"
-"${PYTHON_BIN}" -m ytmusic_organizer.cli demo --workspace "${WORKSPACE}" --mode manual
-echo
-echo "$ ${PYTHON_BIN} -m ytmusic_organizer.cli demo --workspace ${WORKSPACE} --mode api"
-"${PYTHON_BIN}" -m ytmusic_organizer.cli demo --workspace "${WORKSPACE}" --mode api
+echo "$ ytmo demo --mode manual"
+ytmo demo --mode manual
