@@ -57,7 +57,7 @@ Flow:
 2. Run non-failing diagnostics for malformed/missing artifacts.
 3. Optionally validate/diagnose plan quality against `data/liked_songs.json`.
 4. Derive local insights (`identity_score`, richer top playlist summaries, `coverage_ratio`, collection/momentum labels).
-5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Queue & Gaps`, `Health Check`) or plain grouped text when not in TTY. Stats output is diagnostics/action oriented; vague narrative rows are intentionally omitted.
+5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Playlist Standings`, `Health Check`) or plain grouped text when not in TTY. Stats output is diagnostics/action oriented; vague narrative rows are intentionally omitted.
 
 Implementation location:
 - Orchestration and insight derivation: `ytmusic_organizer/workflows.py` (`run_stats`)
@@ -289,7 +289,7 @@ Repository hygiene:
 - Interactive setup mode-selection prompt interruption (Ctrl-C/Ctrl-D) now raises the same setup-specific resume guidance (`Setup was interrupted...`) as later setup steps.
 - Resumable setup now replays previously completed setup steps as numbered `Step n/6 done ...` entries so resumed runs keep accurate step index progression instead of muted `Resuming:` notes.
 - Interactive resumed setup no longer re-prompts for default classification mode when no `--mode` override is passed; it reuses persisted `classification_mode`.
-- Interactive TTY stats output is diagnostics-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (overview), 0.18s (plan/coverage), 0.18s (queue/gaps), 0.12s (health), then frame lock.
+- Interactive TTY stats output is diagnostics-first and rendered as one strong-border canvas with internal section separators. Reveal choreography is fixed to 0.25s (overview), 0.18s (plan/coverage), 0.18s (playlist standings), 0.12s (health), then frame lock.
 - Non-TTY output stays deterministic plain text with the same information hierarchy.
 - `--json` output remains machine-stable.
 - `state.json` should only grow during incremental sync; full rebuild intentionally reinitializes it.
@@ -304,7 +304,7 @@ Repository hygiene:
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
 - `ytmo stats` human output maps internal plan status codes to friendly labels and keeps diagnostics compact in `Health Check` (health + status + optional single diagnostics line when issues exist).
 - `ytmo stats` health treats only core setup artifacts as required (`config.toml`, `state.json`, `managed_playlists.json`, `data/liked_songs.json`, `data/playlist_plan.json`). Sync-cycle artifacts (`data/new_likes.json`, `data/new_plan.json`, `data/missing_matches.json`) do not make a completed setup appear incomplete.
-- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Queue & Gaps` shows detailed top-three playlist summaries plus a compact managed-playlist list.
+- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Playlist Standings` renders top-three playlists as a three-column podium (`Silver | Gold | Bronze`) with honorable mentions and compact diagnostics below it.
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
 

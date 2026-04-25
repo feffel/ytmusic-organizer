@@ -101,7 +101,8 @@ class UISurfaceTests(unittest.TestCase):
         output = capture.getvalue()
         self.assertIn("Status Overview", output)
         self.assertIn("Plan & Coverage", output)
-        self.assertIn("Queue & Gaps", output)
+        self.assertIn("Playlist Standings", output)
+        self.assertNotIn("Queue & Gaps", output)
         self.assertIn("Health Check", output)
         self.assertNotIn("Diagnostics:", output)
         self.assertNotIn("Narrative:", output)
@@ -115,11 +116,50 @@ class UISurfaceTests(unittest.TestCase):
         output = capture.getvalue()
         self.assertIn("Missing matches: 3", output)
         self.assertIn("View missing matches: /tmp/ws/data/missing_matches.json", output)
-        self.assertIn("Top 1: Night Drive (18 songs)", output)
-        self.assertIn("Description: Late-night synth and neon energy", output)
-        self.assertIn("Samples: Song A - Artist A; Song B - Artist B; Song C - Artist C", output)
-        self.assertIn("Top 2: Soft Focus (12 songs)", output)
-        self.assertIn("Managed playlists: 4 total: Night Drive, Soft Focus, Gym, Sunday", output)
+        self.assertIn("SILVER #2", output)
+        self.assertIn("GOLD #1", output)
+        self.assertIn("BRONZE #3", output)
+        self.assertLess(output.index("SILVER #2"), output.index("GOLD #1"))
+        self.assertLess(output.index("GOLD #1"), output.index("BRONZE #3"))
+        self.assertIn("│ Soft Focus", output)
+        self.assertIn("│ Night Drive", output)
+        self.assertIn("│ Gym", output)
+        self.assertIn("Late-night synth", output)
+        self.assertIn(
+            "Gold samples: Song A - Artist A; Song B - Artist B; Song C - Artist C",
+            output,
+        )
+        self.assertIn("Honorable mentions: Sunday", output)
+        self.assertIn("Managed playlists: 4 total", output)
+
+    def test_rich_stats_podium_uses_medal_colors(self) -> None:
+        ui = WizardUI(enabled=True, force_tty=False)
+        sections = ui._build_stats_sections(
+            identity_score=92,
+            sparse=False,
+            collection_shape="Growing catalog",
+            managed_playlists=4,
+            managed_playlist_names=["Night Drive", "Soft Focus", "Gym", "Sunday"],
+            processed_likes=120,
+            plan_playlists=4,
+            plan_status_raw="ok",
+            plan_status="Ready",
+            coverage_ratio=0.82,
+            top_playlists=self._sample_result()["insights"]["top_playlists"],
+            pending_likes=4,
+            missing_matches=3,
+            missing_matches_path="/tmp/ws/data/missing_matches.json",
+            liked_snapshot=150,
+            health_label="Healthy",
+            health_note="ready for sharing",
+            diagnostics_line=None,
+        )
+
+        rendered = ui._render_stats_canvas([sections[2]])
+
+        self.assertIn("[bold #cfd6e6]SILVER #2", rendered)
+        self.assertIn("[bold #ffd166]GOLD #1", rendered)
+        self.assertIn("[bold #d08c60]BRONZE #3", rendered)
 
     def test_show_stats_sparse_mode_de_emphasizes_zeros(self) -> None:
         sparse = self._sample_result()

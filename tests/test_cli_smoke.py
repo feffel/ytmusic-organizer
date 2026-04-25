@@ -292,7 +292,7 @@ class CliSmokeTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("Status Overview", result.stdout)
             self.assertIn("Plan & Coverage", result.stdout)
-            self.assertIn("Queue & Gaps", result.stdout)
+            self.assertIn("Playlist Standings", result.stdout)
             self.assertIn("Health Check", result.stdout)
             self.assertIn("Health:", result.stdout)
 

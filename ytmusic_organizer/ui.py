@@ -48,10 +48,10 @@ class WizardUI:
     _ICON_ERROR = "x"
     _WAVE_FRAMES = ("▁▂▃", "▂▃▄", "▃▄▅", "▄▅▆", "▅▆▇", "▆▇█")
     _SECTION_ICONS = {
-        "Identity Hero": "♪",
-        "Shape + Momentum": "♬",
-        "Highlights": "♫",
-        "Health Footer": "♩",
+        "Status Overview": "♪",
+        "Plan & Coverage": "♬",
+        "Playlist Standings": "♫",
+        "Health Check": "♩",
     }
 
     _PLAN_STATUS_LABELS = {
@@ -501,6 +501,120 @@ class WizardUI:
             parts.append(f"warning {clipped}{suffix}")
         return "; ".join(parts)
 
+    def _split_stats_podium_metrics(
+        self, metrics: list[tuple[str, str, bool]]
+    ) -> tuple[dict[str, dict[str, str]], list[tuple[str, str, bool]]]:
+        podium: dict[str, dict[str, str]] = {
+            "Gold": {},
+            "Silver": {},
+            "Bronze": {},
+        }
+        rest: list[tuple[str, str, bool]] = []
+        current_medal: str | None = None
+        for label, value, accented in metrics:
+            if label.endswith(" podium"):
+                current_medal = label.removesuffix(" podium")
+                podium.setdefault(current_medal, {})["summary"] = value
+                continue
+            if current_medal and label == "Vibe":
+                podium[current_medal]["vibe"] = value
+                continue
+            if current_medal and label == "Samples":
+                podium[current_medal]["samples"] = value
+                continue
+            current_medal = None
+            rest.append((label, value, accented))
+        return podium, rest
+
+    @staticmethod
+    def _stats_podium_summary_parts(summary: str) -> tuple[str, str]:
+        if " (" not in summary:
+            return summary, ""
+        name, count = summary.rsplit(" (", 1)
+        return name, f"({count}"
+
+    @staticmethod
+    def _clip_cell(value: str, width: int) -> str:
+        if len(value) <= width:
+            return value
+        if width <= 1:
+            return value[:width]
+        return value[: width - 1] + "…"
+
+    def _stats_podium_cell(self, value: str, *, width: int, style: str | None) -> str:
+        cell = self._clip_cell(value, width).ljust(width)
+        if not style:
+            return cell
+        return f"[{style}]{cell}[/]"
+
+    def _render_stats_podium(
+        self, metrics: list[tuple[str, str, bool]], *, rich: bool
+    ) -> list[str]:
+        podium, rest = self._split_stats_podium_metrics(metrics)
+        width = 26
+        medal_order = ("Silver", "Gold", "Bronze")
+        medal_titles = {
+            "Silver": "SILVER #2",
+            "Gold": "GOLD #1",
+            "Bronze": "BRONZE #3",
+        }
+        medal_colors = {
+            "Gold": "bold #ffd166",
+            "Silver": "bold #cfd6e6",
+            "Bronze": "bold #d08c60",
+        }
+
+        def row(values: list[str], *, color_headers: bool = False) -> str:
+            cells: list[str] = []
+            for medal, value in zip(medal_order, values, strict=True):
+                style = medal_colors[medal] if rich and color_headers else None
+                cells.append(self._stats_podium_cell(value, width=width, style=style))
+            return "│ " + " │ ".join(cells) + " │"
+
+        border = "─" * (width + 2)
+        lines = [
+            "┌" + "┬".join([border, border, border]) + "┐",
+            row([medal_titles[medal] for medal in medal_order], color_headers=True),
+        ]
+        names: list[str] = []
+        counts: list[str] = []
+        vibes: list[str] = []
+        for medal in medal_order:
+            summary = podium.get(medal, {}).get("summary", "")
+            name, count = self._stats_podium_summary_parts(summary)
+            names.append(name)
+            counts.append(count)
+            vibes.append(podium.get(medal, {}).get("vibe", ""))
+        lines.extend(
+            [
+                row(names),
+                row(counts),
+                row(vibes),
+                "├" + "┼".join([border, border, border]) + "┤",
+                row(["", "████████████", ""]),
+                row(["████████████", "████████████", "████████████"]),
+                row(["████████████", "████████████", ""]),
+                row(["#2", "#1", "#3"], color_headers=True),
+                "└" + "┴".join([border, border, border]) + "┘",
+            ]
+        )
+
+        for medal in ("Gold", "Silver", "Bronze"):
+            samples = podium.get(medal, {}).get("samples", "")
+            if samples:
+                lines.append(f"{medal} samples: {samples}")
+
+        for label, value, accented in rest:
+            value_color = self._COLOR_ACCENT if accented else self._COLOR_INFO
+            styled_value = self._style_paths(value) if rich else value
+            if rich:
+                lines.append(
+                    f"[{self._COLOR_SECONDARY}]{label}:[/] [{value_color}]{styled_value}[/]"
+                )
+            else:
+                lines.append(f"{label}: {value}")
+        return lines
+
     def _build_stats_sections(
         self,
         *,
@@ -546,19 +660,28 @@ class WizardUI:
 
         highlights: list[tuple[str, str, bool]] = []
         if isinstance(top_playlists, list) and top_playlists:
+            podium_labels = ("Gold podium", "Silver podium", "Bronze podium")
+            podium_names: set[str] = set()
             for idx, playlist in enumerate(top_playlists[:3], start=1):
                 if not isinstance(playlist, Mapping):
                     continue
                 name = str(playlist.get("name", "Unnamed"))
+                podium_names.add(name)
                 songs = int(playlist.get("songs", 0))
-                highlights.append((f"Top {idx}", f"{name} ({songs} songs)", False))
+                label = podium_labels[idx - 1]
+                highlights.append((label, f"{name} ({songs} songs)", False))
                 description = str(playlist.get("description", "")).strip()
                 if description:
-                    highlights.append(("Description", description, False))
+                    highlights.append(("Vibe", description, False))
                 sample_songs = playlist.get("sample_songs", [])
                 if isinstance(sample_songs, list) and sample_songs:
                     samples = "; ".join(str(song) for song in sample_songs[:3])
                     highlights.append(("Samples", samples, False))
+            honorable_mentions = [
+                name for name in managed_playlist_names if name and name not in podium_names
+            ]
+            if honorable_mentions:
+                highlights.append(("Honorable mentions", ", ".join(honorable_mentions), False))
         else:
             highlights.append(("Top playlists", "No ranked playlists yet", False))
         if pending_likes > 0 or not sparse:
@@ -588,24 +711,33 @@ class WizardUI:
         return [
             ("Status Overview", hero),
             ("Plan & Coverage", shape),
-            ("Queue & Gaps", highlights),
+            ("Playlist Standings", highlights),
             ("Health Check", footer),
         ]
 
     def _render_stats_canvas(self, sections: list[tuple[str, list[tuple[str, str, bool]]]]) -> str:
         lines: list[str] = []
         separator = f"[{self._COLOR_SECONDARY}]{'─' * 54}[/]"
+        podium_colors = {
+            "Gold podium": "bold #ffd166",
+            "Silver podium": "bold #cfd6e6",
+            "Bronze podium": "bold #d08c60",
+        }
         for idx, (heading, metrics) in enumerate(sections):
             if idx:
                 lines.append(separator)
             icon = self._SECTION_ICONS.get(heading, self._ICON_INFO)
             lines.append(f"[bold {self._COLOR_INFO}]{icon} {heading}[/]")
+            if heading == "Playlist Standings":
+                lines.extend(self._render_stats_podium(metrics, rich=True))
+                continue
             for label, value, accented in metrics:
-                value_color = self._COLOR_ACCENT if accented else self._COLOR_INFO
-                styled_value = self._style_paths(value)
-                lines.append(
-                    f"[{self._COLOR_SECONDARY}]{label}:[/] [{value_color}]{styled_value}[/]"
+                value_color = podium_colors.get(
+                    label, self._COLOR_ACCENT if accented else self._COLOR_INFO
                 )
+                label_color = podium_colors.get(label, self._COLOR_SECONDARY)
+                styled_value = self._style_paths(value)
+                lines.append(f"[{label_color}]{label}:[/] [{value_color}]{styled_value}[/]")
         return "\n".join(lines)
 
     def show_stats(self, result: dict[str, Any]) -> None:
@@ -719,5 +851,9 @@ class WizardUI:
 
         for heading, metrics in sections:
             self._plain_heading(heading)
+            if heading == "Playlist Standings":
+                for line in self._render_stats_podium(metrics, rich=False):
+                    print(f"  {line}")
+                continue
             for label, value, _ in metrics:
                 print(f"  {label}: {value}")
