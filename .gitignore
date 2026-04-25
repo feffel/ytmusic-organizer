@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
+build/
+dist/
 
 # Local auth/state
 browser.json
