@@ -293,8 +293,8 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("Status Overview", result.stdout)
             self.assertIn("Plan & Coverage", result.stdout)
             self.assertIn("Playlist Standings", result.stdout)
-            self.assertIn("Health Check", result.stdout)
-            self.assertIn("Health:", result.stdout)
+            self.assertIn("Overall status:", result.stdout)
+            self.assertNotIn("Health Check", result.stdout)
 
 
 if __name__ == "__main__":

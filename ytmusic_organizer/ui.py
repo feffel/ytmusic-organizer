@@ -4,6 +4,7 @@ import os
 import random
 import re
 import sys
+import textwrap
 import time
 from typing import Any, Mapping
 
@@ -51,7 +52,6 @@ class WizardUI:
         "Status Overview": "♪",
         "Plan & Coverage": "♬",
         "Playlist Standings": "♫",
-        "Health Check": "♩",
     }
 
     _PLAN_STATUS_LABELS = {
@@ -541,8 +541,46 @@ class WizardUI:
             return value[:width]
         return value[: width - 1] + "…"
 
+    @staticmethod
+    def _wrap_cell(value: str, width: int) -> list[str]:
+        if not value:
+            return [""]
+        return textwrap.wrap(
+            value,
+            width=width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        ) or [""]
+
+    @staticmethod
+    def _wrap_list_items(items: list[str], *, width: int) -> list[str]:
+        lines: list[str] = []
+        current = ""
+        for item in items:
+            if not current:
+                current = item
+                continue
+            candidate = f"{current}, {item}"
+            if len(candidate) <= width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = item
+        if current:
+            lines.append(current)
+        return lines
+
+    @staticmethod
+    def _wrap_text(value: str, *, width: int) -> list[str]:
+        return textwrap.wrap(
+            value,
+            width=width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        ) or [""]
+
     def _stats_podium_cell(self, value: str, *, width: int, style: str | None) -> str:
-        cell = self._clip_cell(value, width).ljust(width)
+        cell = value.ljust(width)
         if not style:
             return cell
         return f"[{style}]{cell}[/]"
@@ -571,6 +609,14 @@ class WizardUI:
                 cells.append(self._stats_podium_cell(value, width=width, style=style))
             return "│ " + " │ ".join(cells) + " │"
 
+        def wrapped_rows(values: list[str]) -> list[str]:
+            wrapped = [self._wrap_cell(value, width) for value in values]
+            height = max(len(lines) for lines in wrapped)
+            rows: list[str] = []
+            for idx in range(height):
+                rows.append(row([lines[idx] if idx < len(lines) else "" for lines in wrapped]))
+            return rows
+
         border = "─" * (width + 2)
         lines = [
             "┌" + "┬".join([border, border, border]) + "┐",
@@ -585,15 +631,12 @@ class WizardUI:
             names.append(name)
             counts.append(count)
             vibes.append(podium.get(medal, {}).get("vibe", ""))
+        lines.extend(wrapped_rows(names))
+        lines.extend(wrapped_rows(counts))
+        lines.extend(wrapped_rows(vibes))
         lines.extend(
             [
-                row(names),
-                row(counts),
-                row(vibes),
                 "├" + "┼".join([border, border, border]) + "┤",
-                row(["", "████████████", ""]),
-                row(["████████████", "████████████", "████████████"]),
-                row(["████████████", "████████████", ""]),
                 row(["#2", "#1", "#3"], color_headers=True),
                 "└" + "┴".join([border, border, border]) + "┘",
             ]
@@ -602,17 +645,42 @@ class WizardUI:
         for medal in ("Gold", "Silver", "Bronze"):
             samples = podium.get(medal, {}).get("samples", "")
             if samples:
-                lines.append(f"{medal} samples: {samples}")
+                sample_lines = self._wrap_text(samples, width=72)
+                lines.append(f"{medal} samples: {sample_lines[0]}")
+                for sample_line in sample_lines[1:]:
+                    lines.append(f"  {sample_line}")
 
         for label, value, accented in rest:
             value_color = self._COLOR_ACCENT if accented else self._COLOR_INFO
-            styled_value = self._style_paths(value) if rich else value
+            if label == "Honorable mentions":
+                wrapped_lines = self._wrap_list_items(
+                    [item.strip() for item in value.split(",") if item.strip()],
+                    width=66,
+                )
+            elif label == "Managed playlists":
+                prefix, _, names_value = value.partition(": ")
+                if names_value:
+                    wrapped_names = self._wrap_list_items(
+                        [item.strip() for item in names_value.split(",") if item.strip()],
+                        width=66,
+                    )
+                    wrapped_lines = [f"{prefix}: {wrapped_names[0]}"]
+                    wrapped_lines.extend(wrapped_names[1:])
+                else:
+                    wrapped_lines = self._wrap_text(value, width=72)
+            else:
+                wrapped_lines = self._wrap_text(value, width=72)
             if rich:
+                styled_value = self._style_paths(wrapped_lines[0])
                 lines.append(
                     f"[{self._COLOR_SECONDARY}]{label}:[/] [{value_color}]{styled_value}[/]"
                 )
+                for wrapped_line in wrapped_lines[1:]:
+                    lines.append(f"  [{value_color}]{self._style_paths(wrapped_line)}[/]")
             else:
-                lines.append(f"{label}: {value}")
+                lines.append(f"{label}: {wrapped_lines[0]}")
+                for wrapped_line in wrapped_lines[1:]:
+                    lines.append(f"  {wrapped_line}")
         return lines
 
     def _build_stats_sections(
@@ -639,7 +707,10 @@ class WizardUI:
     ) -> list[tuple[str, list[tuple[str, str, bool]]]]:
         hero: list[tuple[str, str, bool]] = [
             ("Identity score", f"{identity_score}/100", True),
+            ("Overall status", f"{health_label} - {health_note}", health_label == "Healthy"),
         ]
+        if diagnostics_line:
+            hero.append(("Diagnostics", diagnostics_line, False))
         if not sparse:
             hero.extend(
                 [
@@ -701,18 +772,10 @@ class WizardUI:
         if liked_snapshot > 0:
             highlights.append(("Liked snapshot", str(liked_snapshot), True))
 
-        footer: list[tuple[str, str, bool]] = [
-            ("Health", health_label, True),
-            ("Status", health_note, False),
-        ]
-        if diagnostics_line:
-            footer.append(("Diagnostics", diagnostics_line, False))
-
         return [
             ("Status Overview", hero),
             ("Plan & Coverage", shape),
             ("Playlist Standings", highlights),
-            ("Health Check", footer),
         ]
 
     def _render_stats_canvas(self, sections: list[tuple[str, list[tuple[str, str, bool]]]]) -> str:
@@ -818,7 +881,7 @@ class WizardUI:
         )
 
         if self._rich_tty:
-            reveal_delays = (0.25, 0.18, 0.18, 0.12)
+            reveal_delays = (0.25, 0.18, 0.18)
             if Live:
                 seed = Panel.fit(
                     self._render_stats_canvas(sections[:1]),

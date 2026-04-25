@@ -57,7 +57,7 @@ Flow:
 2. Run non-failing diagnostics for malformed/missing artifacts.
 3. Optionally validate/diagnose plan quality against `data/liked_songs.json`.
 4. Derive local insights (`identity_score`, richer top playlist summaries, `coverage_ratio`, collection/momentum labels).
-5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Playlist Standings`, `Health Check`) or plain grouped text when not in TTY. Stats output is diagnostics/action oriented; vague narrative rows are intentionally omitted.
+5. Render human output via a TTY-first single-canvas diagnostics dashboard (`Status Overview`, `Plan & Coverage`, `Playlist Standings`) or plain grouped text when not in TTY. Stats output is diagnostics/action oriented; vague narrative rows are intentionally omitted.
 
 Implementation location:
 - Orchestration and insight derivation: `ytmusic_organizer/workflows.py` (`run_stats`)
@@ -302,9 +302,9 @@ Repository hygiene:
 - Manual-mode dry-run writes prompt text only to temporary files outside workspace and auto-deletes them.
 - `ytmo demo` is always simulation-only: no auth setup, no YTMusic/OpenAI calls, no playlist mutations, and no workspace writes.
 - `ytmo stats` is non-failing for local artifact issues and reports diagnostics/warnings instead of failing.
-- `ytmo stats` human output maps internal plan status codes to friendly labels and keeps diagnostics compact in `Health Check` (health + status + optional single diagnostics line when issues exist).
+- `ytmo stats` human output maps internal plan status codes to friendly labels and keeps overall status plus diagnostics compact in `Status Overview`.
 - `ytmo stats` health treats only core setup artifacts as required (`config.toml`, `state.json`, `managed_playlists.json`, `data/liked_songs.json`, `data/playlist_plan.json`). Sync-cycle artifacts (`data/new_likes.json`, `data/new_plan.json`, `data/missing_matches.json`) do not make a completed setup appear incomplete.
-- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Playlist Standings` renders top-three playlists as a three-column podium (`Silver | Gold | Bronze`) with honorable mentions and compact diagnostics below it.
+- `ytmo stats` shows the path to `data/missing_matches.json` when unresolved matches exist, and `Playlist Standings` renders top-three playlists as a wrapped three-column podium (`Silver | Gold | Bronze`) with wrapped samples, honorable mentions, and compact diagnostics below it.
 - `ytmo stats` is read-only and does not rewrite `data/missing_matches.json`.
 - Generated demo media (`.cast/.gif/.mp4`) must never be committed; only scripts/docs are tracked.
 

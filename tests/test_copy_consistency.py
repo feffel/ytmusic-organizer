@@ -47,7 +47,8 @@ class CopyConsistencyTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("Needs plan file", result.stdout)
             self.assertNotIn("skipped_missing_plan", result.stdout)
-            self.assertIn("Health Check", result.stdout)
+            self.assertIn("Overall status: Needs plan file", result.stdout)
+            self.assertNotIn("Health Check", result.stdout)
 
     def test_manual_mode_prompt_avoids_stdin_jargon(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
