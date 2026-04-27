@@ -4,7 +4,7 @@ This page keeps detailed usage and maintainer-oriented details out of the main R
 
 ## Commands
 
-- `ytmo setup [--mode manual|api] [--auth-file PATH] [--non-interactive] [--restart] [--dry-run]`
+- `ytmo setup [--mode manual|api] [--auth-file PATH] [--auth-method auto|browser|manual] [--non-interactive] [--restart] [--dry-run]`
 - `ytmo sync [--mode manual|api] [--non-interactive] [--dry-run]`
 - `ytmo rebuild [--yes] [--mode manual|api] [--non-interactive] [--dry-run]`
 - `ytmo cleanup [--yes] [--local-only] [--dry-run]`
@@ -34,7 +34,18 @@ Shared options:
 
 ## Auth Setup
 
-`ytmo setup` creates `browser.json` from pasted browser request headers.
+`ytmo setup` creates `browser.json` from browser request headers.
+
+Auth methods:
+- `auto` (default): open YouTube Music and capture authenticated browser traffic; fall back to manual paste if capture fails.
+- `browser`: require browser capture and fail if it cannot capture auth.
+- `manual`: skip browser capture and paste request headers.
+
+Browser capture uses a tool-owned browser profile in the workspace. If Chromium is missing, run:
+
+```bash
+python -m playwright install chromium
+```
 
 Accepted paste formats:
 - Raw header lines, submitted with one blank line:

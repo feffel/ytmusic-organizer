@@ -59,6 +59,15 @@ pipx install .
 ytmo setup
 ```
 
+By default, setup opens a YouTube Music browser window and captures the required
+auth headers after you log in. If browser capture is unavailable, setup falls
+back to manual header paste. If Playwright reports that Chromium is missing,
+run:
+
+```bash
+python -m playwright install chromium
+```
+
 2. run your weekly sync:
 
 ```bash

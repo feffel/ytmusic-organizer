@@ -109,6 +109,112 @@ class ConfigAndBootstrapTests(unittest.TestCase):
             self.assertIn("Run interactive setup", str(ctx.exception))
             self.assertFalse((workspace / "config.toml").exists())
 
+    def test_setup_auto_uses_browser_capture_before_manual_paste(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            captured: dict[str, str] = {}
+
+            def fake_setup(filepath: str | None = None, headers_raw: str | None = None):  # noqa: ANN001
+                captured["headers_raw"] = headers_raw or ""
+                Path(filepath or "").write_text("{}", encoding="utf-8")
+                return headers_raw or ""
+
+            with (
+                self._setup_mocks(),
+                patch(
+                    "ytmusic_organizer.workflows.capture_browser_auth_headers",
+                    return_value="\n".join(
+                        [
+                            "cookie: __Secure-3PAPISID=sapisid",
+                            "authorization: SAPISIDHASH 123_hash",
+                            "x-goog-authuser: 0",
+                            "origin: https://music.youtube.com",
+                        ]
+                    ),
+                ) as capture,
+                patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
+                patch("ytmusic_organizer.workflows._collect_auth_headers_from_stdin") as manual,
+            ):
+                run_setup(
+                    workspace=workspace,
+                    auth_file=None,
+                    mode="manual",
+                    interactive=True,
+                    emit_ui=False,
+                    auth_method="auto",
+                )
+
+            capture.assert_called_once_with(workspace)
+            manual.assert_not_called()
+            self.assertIn("authorization: SAPISIDHASH 123_hash", captured["headers_raw"])
+
+    def test_setup_auto_falls_back_to_manual_when_browser_capture_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            captured: dict[str, str] = {}
+
+            def fake_setup(filepath: str | None = None, headers_raw: str | None = None):  # noqa: ANN001
+                captured["headers_raw"] = headers_raw or ""
+                Path(filepath or "").write_text("{}", encoding="utf-8")
+                return headers_raw or ""
+
+            with (
+                self._setup_mocks(),
+                patch(
+                    "ytmusic_organizer.workflows.capture_browser_auth_headers",
+                    side_effect=RuntimeError("cookie=secret authorization=SAPISIDHASH 123_hash"),
+                ),
+                patch(
+                    "ytmusic_organizer.workflows._collect_auth_headers_from_stdin",
+                    return_value="\n".join(
+                        [
+                            "cookie: __Secure-3PAPISID=manual",
+                            "authorization: SAPISIDHASH manual_hash",
+                            "x-goog-authuser: 0",
+                        ]
+                    ),
+                ) as manual,
+                patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
+            ):
+                run_setup(
+                    workspace=workspace,
+                    auth_file=None,
+                    mode="manual",
+                    interactive=True,
+                    emit_ui=False,
+                    auth_method="auto",
+                )
+
+            manual.assert_called_once()
+            self.assertIn("authorization: SAPISIDHASH manual_hash", captured["headers_raw"])
+
+    def test_setup_browser_auth_method_does_not_fallback_to_manual(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+
+            with (
+                patch(
+                    "ytmusic_organizer.workflows.capture_browser_auth_headers",
+                    side_effect=RuntimeError("browser failed"),
+                ),
+                patch("ytmusic_organizer.workflows._collect_auth_headers_from_stdin") as manual,
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    run_setup(
+                        workspace=workspace,
+                        auth_file=None,
+                        mode="manual",
+                        interactive=True,
+                        emit_ui=False,
+                        auth_method="browser",
+                    )
+
+            manual.assert_not_called()
+            self.assertIn("browser failed", str(ctx.exception))
+
     def test_setup_missing_auth_does_not_emit_workspace_ready_message(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -189,6 +295,7 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                     mode="manual",
                     interactive=True,
                     emit_ui=False,
+                    auth_method="manual",
                 )
 
             self.assertIn("cookie: a=b; c=d", observed["headers_raw"])

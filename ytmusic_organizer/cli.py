@@ -217,6 +217,12 @@ def _base_parser(*, exit_on_error: bool = True) -> argparse.ArgumentParser:
     add_dry_run_argument(p_setup)
     p_setup.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_setup.add_argument("--auth-file", help="Path to browser.json auth file")
+    p_setup.add_argument(
+        "--auth-method",
+        choices=["auto", "browser", "manual"],
+        default="auto",
+        help="How interactive setup should create browser auth when auth is missing",
+    )
     p_setup.add_argument("--non-interactive", action="store_true", help="Disable prompts")
     p_setup.add_argument(
         "--restart", action="store_true", help="Reset setup progress and start from scratch"
@@ -320,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
                 emit_ui=not json_output,
                 restart=args.restart,
                 dry_run=args.dry_run,
+                auth_method=args.auth_method,
             )
             if json_output:
                 emit_json("ok", "setup", result=result)

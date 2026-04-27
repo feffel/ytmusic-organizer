@@ -44,6 +44,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("error: unrecognized arguments: -q", result.stderr)
         self.assertIn("usage: ytmo setup", result.stderr)
         self.assertIn("--auth-file", result.stderr)
+        self.assertIn("--auth-method", result.stderr)
         self.assertIn("--restart", result.stderr)
 
     def test_setup_invalid_mode_shows_setup_help(self) -> None:
@@ -57,6 +58,18 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("error: argument --mode: invalid choice: 'foo'", result.stderr)
         self.assertIn("usage: ytmo setup", result.stderr)
         self.assertIn("--mode {manual,api}", result.stderr)
+
+    def test_setup_invalid_auth_method_shows_setup_help(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "ytmusic_organizer.cli", "setup", "--auth-method", "oauth"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("error: argument --auth-method: invalid choice: 'oauth'", result.stderr)
+        self.assertIn("usage: ytmo setup", result.stderr)
+        self.assertIn("--auth-method {auto,browser,manual}", result.stderr)
 
     def test_demo_invalid_mode_shows_demo_help(self) -> None:
         result = subprocess.run(

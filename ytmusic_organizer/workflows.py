@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from ytmusicapi import setup as ytmusic_setup
 
+from .auth_capture import capture_browser_auth_headers, redact_auth_secrets
 from .config import Config, load_or_create_config, save_config
 from .io_utils import atomic_write_text
 from .paths import WorkspacePaths, ensure_workspace_dirs
@@ -415,7 +416,12 @@ def run_setup(
     emit_ui: bool = True,
     restart: bool = False,
     dry_run: bool = False,
+    auth_method: str = "auto",
 ) -> dict[str, Any]:
+    selected_auth_method = (auth_method or "auto").strip().lower()
+    if selected_auth_method not in {"auto", "browser", "manual"}:
+        raise ValueError("auth_method must be one of: auto, browser, manual")
+
     ui = WizardUI(enabled=emit_ui)
     ui.start_flow(
         steps=[
@@ -536,11 +542,26 @@ def run_setup(
                     )
 
                 ui.warning("No auth file found in workspace.")
-                ui.note("Starting browser auth setup (from browser network request headers).")
-                ui.note("Required keys: cookie and x-goog-authuser.")
-                ui.note("x-goog-authuser is usually 0 or 1 from request headers.")
-                ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
-                headers_raw = _collect_auth_headers_from_stdin(ui=ui)
+                if selected_auth_method in {"auto", "browser"}:
+                    ui.note("Opening YouTube Music to capture browser auth automatically.")
+                    ui.note("If prompted, log in and let the page finish loading.")
+                    try:
+                        headers_raw = capture_browser_auth_headers(workspace)
+                    except Exception as exc:
+                        if selected_auth_method == "browser":
+                            raise
+                        ui.warning("Browser auth capture failed: " + redact_auth_secrets(str(exc)))
+                        ui.note("Falling back to manual browser header paste.")
+                        ui.note(
+                            "Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html"
+                        )
+                        headers_raw = _collect_auth_headers_from_stdin(ui=ui)
+                    else:
+                        ui.success("Captured browser auth headers")
+                else:
+                    ui.note("Starting browser auth setup (from browser network request headers).")
+                    ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
+                    headers_raw = _collect_auth_headers_from_stdin(ui=ui)
                 ytmusic_setup(filepath=str(auth_path), headers_raw=headers_raw)
 
                 if not auth_path.exists():

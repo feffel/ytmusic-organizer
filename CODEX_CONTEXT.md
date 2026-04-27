@@ -271,7 +271,8 @@ Repository hygiene:
 - Only delete playlists whose IDs are listed in `managed_playlists.json` schema v2.
 - Never delete arbitrary playlists outside managed index.
 - Do not overwrite or expose `browser.json`.
-- Interactive auth setup captures paste in non-canonical TTY mode (to avoid long-line truncation), and both TTY/non-TTY now share one header-collection state machine: auto-detect JSON-vs-raw input, complete on closing `}` (JSON) or blank line (raw), and validate required keys (`cookie`, `x-goog-authuser`) before writing auth.
+- Interactive auth setup defaults to browser-assisted capture via `ytmo setup --auth-method auto`: it opens YouTube Music in a workspace-owned Playwright profile, captures authenticated `/youtubei/v1/browse` request headers, writes `browser.json`, and falls back to manual paste when capture is unavailable. `--auth-method browser` requires capture; `--auth-method manual` uses paste-only setup.
+- Manual auth setup captures paste in non-canonical TTY mode (to avoid long-line truncation), and both TTY/non-TTY now share one header-collection state machine: auto-detect JSON-vs-raw input, complete on closing `}` (JSON) or blank line (raw), and validate required keys (`cookie`, `x-goog-authuser`) before writing auth.
 - Setup writes `config.toml` transactionally after auth is ready; missing auth no longer emits a premature workspace-ready success line.
 - Interactive manual plan input no longer depends on EOF signals; it accepts line-based paste, auto-submits once JSON parses, and allows blank-line submit for raw/fenced retries.
 - Manual classification callouts now explicitly instruct users to run the generated prompt in their AI tool and paste back the full output JSON.

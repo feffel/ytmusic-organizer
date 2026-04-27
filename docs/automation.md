@@ -21,6 +21,7 @@ pipx install .
 - YouTube Music auth must exist at the configured auth path (default workspace `browser.json`).
 - For API classification mode, `OPENAI_API_KEY` must be set.
 - `--dry-run` is non-mutating, but still may require auth and network reads.
+- Browser-assisted auth setup is interactive. Automation should pre-provision `browser.json` or pass `--auth-file`.
 
 ## Workspace Model
 
