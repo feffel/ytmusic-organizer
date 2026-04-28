@@ -13,7 +13,12 @@ from typing import Any, Callable
 
 from ytmusicapi import setup as ytmusic_setup
 
-from .auth_capture import capture_browser_auth_headers, redact_auth_secrets
+from .auth_capture import (
+    capture_browser_auth_headers,
+    install_playwright_chromium,
+    is_missing_chromium_error,
+    redact_auth_secrets,
+)
 from .config import Config, load_or_create_config, save_config
 from .io_utils import atomic_write_text
 from .paths import WorkspacePaths, ensure_workspace_dirs
@@ -297,6 +302,28 @@ def _collect_auth_headers_from_stdin(ui: WizardUI | None = None) -> str:
     return _collect_auth_headers_from_line_reader(input)
 
 
+def _confirm_chromium_install() -> bool:
+    answer = (
+        input("Install browser support for automated auth capture now? [Y/n]: ").strip().lower()
+    )
+    return answer in {"", "y", "yes"}
+
+
+def _browser_capture_with_optional_install(workspace: Path, ui: WizardUI) -> str:
+    try:
+        return capture_browser_auth_headers(workspace)
+    except Exception as exc:
+        if not is_missing_chromium_error(exc):
+            raise
+        ui.warning(redact_auth_secrets(str(exc)))
+        if not _confirm_chromium_install():
+            raise RuntimeError("Chromium install declined by user.") from exc
+        ui.note("Installing browser support for automated auth capture.")
+        install_playwright_chromium()
+        ui.note("Retrying browser auth capture.")
+        return capture_browser_auth_headers(workspace)
+
+
 def _load_managed_playlists(paths: WorkspacePaths) -> list[str]:
     if not paths.managed.exists():
         return []
@@ -546,7 +573,7 @@ def run_setup(
                     ui.note("Opening YouTube Music to capture browser auth automatically.")
                     ui.note("If prompted, log in and let the page finish loading.")
                     try:
-                        headers_raw = capture_browser_auth_headers(workspace)
+                        headers_raw = _browser_capture_with_optional_install(workspace, ui)
                     except Exception as exc:
                         if selected_auth_method == "browser":
                             raise

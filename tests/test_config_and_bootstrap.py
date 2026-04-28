@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from ytmusic_organizer.config import Config, load_or_create_config, save_config
+from ytmusic_organizer.auth_capture import BrowserAuthCaptureError
 from ytmusic_organizer.workflows import ensure_bootstrap_completed, run_setup
 
 
@@ -189,6 +190,127 @@ class ConfigAndBootstrapTests(unittest.TestCase):
 
             manual.assert_called_once()
             self.assertIn("authorization: SAPISIDHASH manual_hash", captured["headers_raw"])
+
+    def test_setup_auto_installs_chromium_and_retries_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            captured: dict[str, str] = {}
+
+            def fake_setup(filepath: str | None = None, headers_raw: str | None = None):  # noqa: ANN001
+                captured["headers_raw"] = headers_raw or ""
+                Path(filepath or "").write_text("{}", encoding="utf-8")
+                return headers_raw or ""
+
+            with (
+                self._setup_mocks(),
+                patch(
+                    "ytmusic_organizer.workflows.capture_browser_auth_headers",
+                    side_effect=[
+                        BrowserAuthCaptureError("Automated browser support needs Chromium."),
+                        "\n".join(
+                            [
+                                "cookie: __Secure-3PAPISID=sapisid",
+                                "authorization: SAPISIDHASH retry_hash",
+                                "x-goog-authuser: 0",
+                            ]
+                        ),
+                    ],
+                ) as capture,
+                patch("ytmusic_organizer.workflows.install_playwright_chromium") as install,
+                patch("builtins.input", return_value=""),
+                patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
+                patch("ytmusic_organizer.workflows._collect_auth_headers_from_stdin") as manual,
+            ):
+                run_setup(
+                    workspace=workspace,
+                    auth_file=None,
+                    mode="manual",
+                    interactive=True,
+                    emit_ui=False,
+                    auth_method="auto",
+                )
+
+            self.assertEqual(capture.call_count, 2)
+            install.assert_called_once()
+            manual.assert_not_called()
+            self.assertIn("authorization: SAPISIDHASH retry_hash", captured["headers_raw"])
+
+    def test_setup_auto_declining_chromium_install_falls_back_to_manual(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            captured: dict[str, str] = {}
+
+            def fake_setup(filepath: str | None = None, headers_raw: str | None = None):  # noqa: ANN001
+                captured["headers_raw"] = headers_raw or ""
+                Path(filepath or "").write_text("{}", encoding="utf-8")
+                return headers_raw or ""
+
+            with (
+                self._setup_mocks(),
+                patch(
+                    "ytmusic_organizer.workflows.capture_browser_auth_headers",
+                    side_effect=BrowserAuthCaptureError(
+                        "Automated browser support needs Chromium."
+                    ),
+                ),
+                patch("ytmusic_organizer.workflows.install_playwright_chromium") as install,
+                patch("builtins.input", return_value="n"),
+                patch(
+                    "ytmusic_organizer.workflows._collect_auth_headers_from_stdin",
+                    return_value="\n".join(
+                        [
+                            "cookie: __Secure-3PAPISID=manual",
+                            "authorization: SAPISIDHASH manual_hash",
+                            "x-goog-authuser: 0",
+                        ]
+                    ),
+                ) as manual,
+                patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
+            ):
+                run_setup(
+                    workspace=workspace,
+                    auth_file=None,
+                    mode="manual",
+                    interactive=True,
+                    emit_ui=False,
+                    auth_method="auto",
+                )
+
+            install.assert_not_called()
+            manual.assert_called_once()
+            self.assertIn("authorization: SAPISIDHASH manual_hash", captured["headers_raw"])
+
+    def test_setup_browser_declining_chromium_install_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+
+            with (
+                patch(
+                    "ytmusic_organizer.workflows.capture_browser_auth_headers",
+                    side_effect=BrowserAuthCaptureError(
+                        "Automated browser support needs Chromium."
+                    ),
+                ),
+                patch("ytmusic_organizer.workflows.install_playwright_chromium") as install,
+                patch("builtins.input", return_value="n"),
+                patch("ytmusic_organizer.workflows._collect_auth_headers_from_stdin") as manual,
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    run_setup(
+                        workspace=workspace,
+                        auth_file=None,
+                        mode="manual",
+                        interactive=True,
+                        emit_ui=False,
+                        auth_method="browser",
+                    )
+
+            install.assert_not_called()
+            manual.assert_not_called()
+            self.assertIn("Chromium install declined", str(ctx.exception))
 
     def test_setup_browser_auth_method_does_not_fallback_to_manual(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

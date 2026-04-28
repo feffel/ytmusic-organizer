@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import subprocess
+import sys
 import time
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -9,6 +11,10 @@ from urllib.parse import urlparse
 
 class BrowserAuthCaptureError(RuntimeError):
     """Raised when browser-assisted auth capture cannot produce usable headers."""
+
+
+class PlaywrightChromiumMissingError(BrowserAuthCaptureError):
+    """Raised when Playwright is present but its Chromium browser is missing."""
 
 
 _SECRET_PATTERNS = (
@@ -67,13 +73,34 @@ def _default_playwright_factory() -> Any:
     return sync_playwright()
 
 
+def is_missing_chromium_error(exc: BaseException) -> bool:
+    message = str(exc)
+    return (
+        isinstance(exc, PlaywrightChromiumMissingError)
+        or "Executable doesn't exist" in message
+        or "playwright install" in message
+        or "Automated browser support needs Chromium" in message
+    )
+
+
+def install_playwright_chromium(
+    run_command: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> None:
+    runner = run_command or subprocess.run
+    command = [sys.executable, "-m", "playwright", "install", "chromium"]
+    result = runner(command, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        detail = redact_auth_secrets((result.stderr or result.stdout or "").strip())
+        message = "Unable to install Playwright Chromium automatically."
+        if detail:
+            message += f" {detail}"
+        raise BrowserAuthCaptureError(message)
+
+
 def _browser_error_message(exc: Exception) -> str:
     message = redact_auth_secrets(str(exc))
     if "Executable doesn't exist" in message or "playwright install" in message:
-        return (
-            "Playwright Chromium is not installed. "
-            "Run `pipx run playwright install chromium`, then retry setup."
-        )
+        return "Automated browser support needs Chromium before capture can continue."
     return message
 
 
@@ -125,4 +152,6 @@ def capture_browser_auth_headers(
     except BrowserAuthCaptureError:
         raise
     except Exception as exc:
+        if is_missing_chromium_error(exc):
+            raise PlaywrightChromiumMissingError(_browser_error_message(exc)) from exc
         raise BrowserAuthCaptureError(_browser_error_message(exc)) from exc

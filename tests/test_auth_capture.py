@@ -4,6 +4,7 @@ import unittest
 
 from ytmusic_organizer.auth_capture import (
     BrowserAuthCaptureError,
+    install_playwright_chromium,
     capture_browser_auth_headers,
     redact_auth_secrets,
 )
@@ -101,6 +102,12 @@ class _MissingBrowserFactory:
         return None
 
 
+class _CompletedProcess:
+    returncode = 0
+    stdout = "installed"
+    stderr = ""
+
+
 class BrowserAuthCaptureTests(unittest.TestCase):
     def test_capture_returns_required_browser_headers_from_browse_request(self) -> None:
         request = _FakeRequest(
@@ -164,7 +171,7 @@ class BrowserAuthCaptureTests(unittest.TestCase):
         self.assertNotIn("123_hash", redacted)
         self.assertIn("<redacted>", redacted)
 
-    def test_missing_chromium_guidance_uses_pipx_safe_command(self) -> None:
+    def test_missing_chromium_error_requests_automated_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(BrowserAuthCaptureError) as ctx:
                 capture_browser_auth_headers(
@@ -173,8 +180,24 @@ class BrowserAuthCaptureTests(unittest.TestCase):
                 )
 
         message = str(ctx.exception)
-        self.assertIn("pipx run playwright install chromium", message)
+        self.assertIn("Automated browser support needs Chromium", message)
         self.assertNotIn("python -m playwright install chromium", message)
+
+    def test_installer_uses_current_runtime_playwright_module(self) -> None:
+        observed: dict[str, object] = {}
+
+        def fake_run(command, **kwargs):  # noqa: ANN001
+            observed["command"] = command
+            observed["kwargs"] = kwargs
+            return _CompletedProcess()
+
+        install_playwright_chromium(run_command=fake_run)
+
+        command = observed["command"]
+        self.assertIsInstance(command, list)
+        self.assertEqual(command[1:], ["-m", "playwright", "install", "chromium"])
+        self.assertIn("capture_output", observed["kwargs"])
+        self.assertTrue(observed["kwargs"]["capture_output"])  # type: ignore[index]
 
 
 if __name__ == "__main__":

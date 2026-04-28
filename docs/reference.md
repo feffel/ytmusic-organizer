@@ -41,13 +41,9 @@ Auth methods:
 - `browser`: require browser capture and fail if it cannot capture auth.
 - `manual`: skip browser capture and paste request headers.
 
-Browser capture uses a tool-owned browser profile in the workspace. If Chromium is missing, run:
+Browser capture uses a tool-owned browser profile in the workspace. If Chromium is missing, interactive setup asks before installing the required Playwright browser automatically.
 
-```bash
-pipx run playwright install chromium
-```
-
-For an activated source checkout virtualenv, `python -m playwright install chromium` also works.
+Troubleshooting: if setup reports that the Python `playwright` package is unavailable, reinstall or upgrade `ytmusic-organizer` so its runtime environment includes declared dependencies.
 
 Accepted paste formats:
 - Raw header lines, submitted with one blank line:
