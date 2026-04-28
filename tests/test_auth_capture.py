@@ -62,9 +62,18 @@ class _FakeChromium:
         return self.context
 
 
+class _MissingBrowserChromium:
+    def launch_persistent_context(self, user_data_dir: str, **_kwargs):  # noqa: ANN001, ARG002
+        raise RuntimeError("Executable doesn't exist at /tmp/chromium")
+
+
 class _FakePlaywright:
     def __init__(self, context: _FakeContext) -> None:
         self.chromium = _FakeChromium(context)
+
+
+class _MissingBrowserPlaywright:
+    chromium = _MissingBrowserChromium()
 
 
 class _FakePlaywrightFactory:
@@ -76,6 +85,17 @@ class _FakePlaywrightFactory:
 
     def __enter__(self) -> _FakePlaywright:
         return self.playwright
+
+    def __exit__(self, *_exc) -> None:  # noqa: ANN002
+        return None
+
+
+class _MissingBrowserFactory:
+    def __call__(self):
+        return self
+
+    def __enter__(self) -> _MissingBrowserPlaywright:
+        return _MissingBrowserPlaywright()
 
     def __exit__(self, *_exc) -> None:  # noqa: ANN002
         return None
@@ -143,6 +163,18 @@ class BrowserAuthCaptureTests(unittest.TestCase):
         self.assertNotIn("secret", redacted)
         self.assertNotIn("123_hash", redacted)
         self.assertIn("<redacted>", redacted)
+
+    def test_missing_chromium_guidance_uses_pipx_safe_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(BrowserAuthCaptureError) as ctx:
+                capture_browser_auth_headers(
+                    workspace=Path(tmp),
+                    playwright_factory=_MissingBrowserFactory(),
+                )
+
+        message = str(ctx.exception)
+        self.assertIn("pipx run playwright install chromium", message)
+        self.assertNotIn("python -m playwright install chromium", message)
 
 
 if __name__ == "__main__":

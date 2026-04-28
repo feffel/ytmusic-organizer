@@ -65,8 +65,11 @@ back to manual header paste. If Playwright reports that Chromium is missing,
 run:
 
 ```bash
-python -m playwright install chromium
+pipx run playwright install chromium
 ```
+
+For an activated source checkout virtualenv, `python -m playwright install chromium`
+also works.
 
 2. run your weekly sync:
 

@@ -44,8 +44,10 @@ Auth methods:
 Browser capture uses a tool-owned browser profile in the workspace. If Chromium is missing, run:
 
 ```bash
-python -m playwright install chromium
+pipx run playwright install chromium
 ```
+
+For an activated source checkout virtualenv, `python -m playwright install chromium` also works.
 
 Accepted paste formats:
 - Raw header lines, submitted with one blank line:

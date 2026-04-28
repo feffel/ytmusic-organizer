@@ -72,7 +72,7 @@ def _browser_error_message(exc: Exception) -> str:
     if "Executable doesn't exist" in message or "playwright install" in message:
         return (
             "Playwright Chromium is not installed. "
-            "Run `python -m playwright install chromium`, then retry setup."
+            "Run `pipx run playwright install chromium`, then retry setup."
         )
     return message
 
