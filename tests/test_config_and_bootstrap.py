@@ -236,6 +236,53 @@ class ConfigAndBootstrapTests(unittest.TestCase):
             manual.assert_not_called()
             self.assertIn("authorization: SAPISIDHASH retry_hash", captured["headers_raw"])
 
+    def test_setup_auto_prints_browser_login_guidance_and_wait_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+
+            def fake_setup(filepath: str | None = None, headers_raw: str | None = None):  # noqa: ANN001
+                Path(filepath or "").write_text("{}", encoding="utf-8")
+                return headers_raw or ""
+
+            output = io.StringIO()
+            with (
+                self._setup_mocks(),
+                patch(
+                    "ytmusic_organizer.workflows.capture_browser_auth_headers",
+                    side_effect=[
+                        BrowserAuthCaptureError("Automated browser support needs Chromium."),
+                        "\n".join(
+                            [
+                                "cookie: __Secure-3PAPISID=sapisid",
+                                "authorization: SAPISIDHASH retry_hash",
+                                "x-goog-authuser: 0",
+                            ]
+                        ),
+                    ],
+                ),
+                patch("ytmusic_organizer.workflows.install_playwright_chromium"),
+                patch("builtins.input", return_value=""),
+                patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
+                patch("sys.stdout", output),
+            ):
+                run_setup(
+                    workspace=workspace,
+                    auth_file=None,
+                    mode="manual",
+                    interactive=True,
+                    emit_ui=True,
+                    auth_method="auto",
+                )
+
+            rendered = output.getvalue()
+            self.assertIn("A browser window will open.", rendered)
+            self.assertIn("Log in to YouTube Music if needed.", rendered)
+            self.assertIn("Keep this terminal open.", rendered)
+            self.assertIn("Waiting for an authenticated YouTube Music request", rendered)
+            self.assertIn("[wait] Installing browser support", rendered)
+            self.assertIn("[wait] Waiting for browser auth capture", rendered)
+
     def test_setup_auto_declining_chromium_install_falls_back_to_manual(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / ".ytmo"

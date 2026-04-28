@@ -41,7 +41,9 @@ Auth methods:
 - `browser`: require browser capture and fail if it cannot capture auth.
 - `manual`: skip browser capture and paste request headers.
 
-Browser capture uses a tool-owned browser profile in the workspace. If Chromium is missing, interactive setup asks before installing the required Playwright browser automatically.
+Browser capture uses a tool-owned browser profile in the workspace. Setup tells you to log in to YouTube Music if needed, keeps waiting for an authenticated request, and tries to bring the browser page forward. If Chromium is missing, interactive setup asks before installing the required Playwright browser automatically.
+
+Long-running network, browser, playlist, and classification steps show a wait indicator in human output. JSON output stays machine-readable and does not include wait text.
 
 Troubleshooting: if setup reports that the Python `playwright` package is unavailable, reinstall or upgrade `ytmusic-organizer` so its runtime environment includes declared dependencies.
 

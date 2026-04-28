@@ -20,6 +20,24 @@ class _FakeRequest:
 
 
 class _FakePage:
+    def __init__(self, context: "_FakeContext", fail_bring_to_front: bool = False) -> None:
+        self._context = context
+        self.bring_to_front_calls = 0
+        self.fail_bring_to_front = fail_bring_to_front
+
+    def bring_to_front(self) -> None:
+        self.bring_to_front_calls += 1
+        if self.fail_bring_to_front:
+            raise RuntimeError("cannot focus page")
+
+    def goto(self, _url: str, wait_until: str = "domcontentloaded") -> None:  # noqa: ARG002
+        self._context.emit_request()
+
+    def wait_for_timeout(self, _milliseconds: int) -> None:
+        return None
+
+
+class _FakePageWithoutBringToFront:
     def __init__(self, context: "_FakeContext") -> None:
         self._context = context
 
@@ -31,17 +49,29 @@ class _FakePage:
 
 
 class _FakeContext:
-    def __init__(self, request: _FakeRequest | None) -> None:
+    def __init__(
+        self,
+        request: _FakeRequest | None,
+        *,
+        page_without_bring_to_front: bool = False,
+        fail_bring_to_front: bool = False,
+    ) -> None:
         self.pages: list[_FakePage] = []
         self._request = request
         self._handlers: dict[str, object] = {}
         self.closed = False
+        self.page_without_bring_to_front = page_without_bring_to_front
+        self.fail_bring_to_front = fail_bring_to_front
 
     def on(self, event_name: str, handler) -> None:  # noqa: ANN001
         self._handlers[event_name] = handler
 
-    def new_page(self) -> _FakePage:
-        page = _FakePage(self)
+    def new_page(self):
+        page = (
+            _FakePageWithoutBringToFront(self)
+            if self.page_without_bring_to_front
+            else _FakePage(self, fail_bring_to_front=self.fail_bring_to_front)
+        )
         self.pages.append(page)
         return page
 
@@ -137,6 +167,47 @@ class BrowserAuthCaptureTests(unittest.TestCase):
         self.assertNotIn("sec-fetch-site", headers)
         self.assertTrue(context.closed)
         self.assertTrue(factory.playwright.chromium.profile_dir.endswith("browser-auth-profile"))
+        self.assertEqual(context.pages[0].bring_to_front_calls, 2)
+
+    def test_capture_ignores_unavailable_browser_foregrounding(self) -> None:
+        request = _FakeRequest(
+            "https://music.youtube.com/youtubei/v1/browse?alt=json",
+            {
+                "cookie": "__Secure-3PAPISID=sapisid",
+                "authorization": "SAPISIDHASH 123_hash",
+                "x-goog-authuser": "0",
+            },
+        )
+        context = _FakeContext(request, fail_bring_to_front=True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            headers = capture_browser_auth_headers(
+                workspace=Path(tmp),
+                timeout_seconds=1,
+                playwright_factory=_FakePlaywrightFactory(context),
+            )
+
+        self.assertIn("authorization: SAPISIDHASH 123_hash", headers)
+
+    def test_capture_works_when_page_has_no_foregrounding_api(self) -> None:
+        request = _FakeRequest(
+            "https://music.youtube.com/youtubei/v1/browse?alt=json",
+            {
+                "cookie": "__Secure-3PAPISID=sapisid",
+                "authorization": "SAPISIDHASH 123_hash",
+                "x-goog-authuser": "0",
+            },
+        )
+        context = _FakeContext(request, page_without_bring_to_front=True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            headers = capture_browser_auth_headers(
+                workspace=Path(tmp),
+                timeout_seconds=1,
+                playwright_factory=_FakePlaywrightFactory(context),
+            )
+
+        self.assertIn("authorization: SAPISIDHASH 123_hash", headers)
 
     def test_capture_times_out_without_leaking_seen_header_values(self) -> None:
         request = _FakeRequest(

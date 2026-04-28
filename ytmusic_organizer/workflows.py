@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 import os
+from contextlib import nullcontext
 from collections import Counter
 from pathlib import Path
 import sys
@@ -125,6 +126,10 @@ def _create_temp_prompt_path(prefix: str) -> Path:
     fd, raw_path = tempfile.mkstemp(prefix=prefix, suffix=".txt")
     os.close(fd)
     return Path(raw_path)
+
+
+def _status(ui: WizardUI | None, message: str):
+    return ui.status(message) if ui else nullcontext()
 
 
 def _parse_auth_headers_text(raw_text: str) -> dict[str, str]:
@@ -311,7 +316,8 @@ def _confirm_chromium_install() -> bool:
 
 def _browser_capture_with_optional_install(workspace: Path, ui: WizardUI) -> str:
     try:
-        return capture_browser_auth_headers(workspace)
+        with ui.status("Waiting for browser auth capture"):
+            return capture_browser_auth_headers(workspace)
     except Exception as exc:
         if not is_missing_chromium_error(exc):
             raise
@@ -319,9 +325,11 @@ def _browser_capture_with_optional_install(workspace: Path, ui: WizardUI) -> str
         if not _confirm_chromium_install():
             raise RuntimeError("Chromium install declined by user.") from exc
         ui.note("Installing browser support for automated auth capture.")
-        install_playwright_chromium()
-        ui.note("Retrying browser auth capture.")
-        return capture_browser_auth_headers(workspace)
+        with ui.status("Installing browser support"):
+            install_playwright_chromium()
+        ui.note("Waiting for an authenticated YouTube Music request after browser support install.")
+        with ui.status("Waiting for browser auth capture"):
+            return capture_browser_auth_headers(workspace)
 
 
 def _load_managed_playlists(paths: WorkspacePaths) -> list[str]:
@@ -486,7 +494,8 @@ def run_setup(
 
         yt = make_ytmusic(auth_path)
         selected_mode = _effective_mode(mode, config)
-        liked = export_liked_data(yt)
+        with ui.status("Exporting liked songs from YouTube Music"):
+            liked = export_liked_data(yt)
         temp_prompt = _create_temp_prompt_path("ytmo-full-plan-")
         try:
             plan = _obtain_full_plan(
@@ -502,7 +511,8 @@ def run_setup(
         finally:
             if temp_prompt.exists():
                 temp_prompt.unlink()
-        apply_result = simulate_apply_plan(yt, liked, plan, create_playlists=True)
+        with ui.status("Previewing playlist changes"):
+            apply_result = simulate_apply_plan(yt, liked, plan, create_playlists=True)
         results = apply_result.get("results", [])
         return {
             "dry_run": True,
@@ -570,8 +580,11 @@ def run_setup(
 
                 ui.warning("No auth file found in workspace.")
                 if selected_auth_method in {"auto", "browser"}:
-                    ui.note("Opening YouTube Music to capture browser auth automatically.")
-                    ui.note("If prompted, log in and let the page finish loading.")
+                    ui.note("A browser window will open.")
+                    ui.note("Log in to YouTube Music if needed.")
+                    ui.note("Keep this terminal open.")
+                    ui.note("Return here after the capture completes.")
+                    ui.note("Waiting for an authenticated YouTube Music request...")
                     try:
                         headers_raw = _browser_capture_with_optional_install(workspace, ui)
                     except Exception as exc:
@@ -606,7 +619,8 @@ def run_setup(
 
         if not state.is_step_done("liked_exported") or not paths.liked_songs.exists():
             ui.step("Export full liked songs")
-            liked = export_liked(yt, paths.liked_songs)
+            with ui.status("Exporting liked songs from YouTube Music"):
+                liked = export_liked(yt, paths.liked_songs)
             state.mark_step("liked_exported")
             ui.success(f"Exported {len(liked)} liked songs")
         else:
@@ -623,13 +637,14 @@ def run_setup(
 
         if not state.is_step_done("playlists_applied"):
             ui.step("Create and fill playlists")
-            apply_result = apply_plan(
-                yt=yt,
-                liked_path=paths.liked_songs,
-                plan_path=paths.playlist_plan,
-                missing_path=paths.missing_matches,
-                create_playlists=True,
-            )
+            with ui.status("Creating and filling YouTube Music playlists"):
+                apply_result = apply_plan(
+                    yt=yt,
+                    liked_path=paths.liked_songs,
+                    plan_path=paths.playlist_plan,
+                    missing_path=paths.missing_matches,
+                    create_playlists=True,
+                )
             state.mark_step("playlists_applied")
             ui.success("Playlists created/updated")
         else:
@@ -638,7 +653,8 @@ def run_setup(
 
         if not state.is_step_done("managed_updated") or not paths.managed.exists():
             ui.step("Update managed playlist index")
-            update_managed_playlists(apply_result.get("results", []), paths.managed)
+            with ui.status("Updating managed playlist index"):
+                update_managed_playlists(apply_result.get("results", []), paths.managed)
             state.mark_step("managed_updated")
             ui.success("Managed playlist index updated")
         else:
@@ -646,7 +662,8 @@ def run_setup(
 
         if not state.is_step_done("state_initialized") or not paths.state.exists():
             ui.step("Initialize incremental state")
-            initialize_state(paths.liked_songs, paths.state)
+            with ui.status("Initializing sync state"):
+                initialize_state(paths.liked_songs, paths.state)
             state.mark_step("state_initialized")
             ui.success("State initialized")
         else:
@@ -724,7 +741,8 @@ def _obtain_full_plan(
                 encoding="utf-8",
             )
     else:
-        plan = classify_with_openai(prompt_text, model=config.openai_model)
+        with _status(ui, "Generating playlist plan with OpenAI"):
+            plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
             atomic_write_text(
                 selected_plan_output,
@@ -799,7 +817,8 @@ def _obtain_new_plan(
                 encoding="utf-8",
             )
     else:
-        plan = classify_with_openai(prompt_text, model=config.openai_model)
+        with _status(ui, "Generating new-likes plan with OpenAI"):
+            plan = classify_with_openai(prompt_text, model=config.openai_model)
         if selected_plan_output:
             atomic_write_text(
                 selected_plan_output,
@@ -838,16 +857,17 @@ def run_weekly_sync(
     yt = make_ytmusic(auth_path)
 
     ui.start_step("Export new likes")
-    if dry_run:
-        state_data = (
-            json.loads(paths.state.read_text(encoding="utf-8"))
-            if paths.state.exists()
-            else {"processed_video_ids": []}
-        )
-        processed_ids = set(state_data.get("processed_video_ids", []))
-        new_likes = export_new_likes_data(yt, processed_ids)
-    else:
-        new_likes = export_new_likes(yt, paths.state, paths.new_likes)
+    with ui.status("Scanning liked songs for new tracks"):
+        if dry_run:
+            state_data = (
+                json.loads(paths.state.read_text(encoding="utf-8"))
+                if paths.state.exists()
+                else {"processed_video_ids": []}
+            )
+            processed_ids = set(state_data.get("processed_video_ids", []))
+            new_likes = export_new_likes_data(yt, processed_ids)
+        else:
+            new_likes = export_new_likes(yt, paths.state, paths.new_likes)
     ui.finish_step(f"Detected {len(new_likes)} new likes")
 
     if not new_likes:
@@ -877,12 +897,13 @@ def run_weekly_sync(
                 temp_prompt.unlink()
         ui.finish_step("Plan ready")
         ui.start_step("Apply playlist updates")
-        preview = simulate_apply_new_likes(
-            yt,
-            new_likes,
-            plan,
-            current_state=state_data,
-        )
+        with ui.status("Previewing playlist updates"):
+            preview = simulate_apply_new_likes(
+                yt,
+                new_likes,
+                plan,
+                current_state=state_data,
+            )
         results = preview.get("results", [])
         ui.finish_step(
             "Previewed playlist updates: "
@@ -901,9 +922,10 @@ def run_weekly_sync(
     _obtain_new_plan(selected_mode, config, paths, ui=ui, interactive=interactive)
     ui.finish_step("Plan ready")
     ui.start_step("Apply playlist updates")
-    result = apply_new_likes(
-        yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches
-    )
+    with ui.status("Applying playlist updates"):
+        result = apply_new_likes(
+            yt, paths.new_likes, paths.new_plan, paths.state, paths.missing_matches
+        )
     result["new_likes"] = len(new_likes)
     ui.finish_step(
         f"Updated playlists with {result.get('new_likes', 0)} new likes; missing={result.get('missing', 0)}"
@@ -941,7 +963,8 @@ def run_full_reset(
     yt = make_ytmusic(auth_path)
 
     ui.start_step("Export full liked songs")
-    liked = export_liked_data(yt) if dry_run else export_liked(yt, paths.liked_songs)
+    with ui.status("Exporting liked songs from YouTube Music"):
+        liked = export_liked_data(yt) if dry_run else export_liked(yt, paths.liked_songs)
     ui.finish_step(f"Exported {len(liked)} liked songs")
     ui.start_step("Generate or wait for playlist plan")
     if dry_run:
@@ -963,17 +986,19 @@ def run_full_reset(
         ui.finish_step("Plan ready")
 
         ui.start_step("Delete managed playlists")
-        delete_result = simulate_delete_managed_playlists(yt, paths.managed)
+        with ui.status("Previewing managed playlist deletion"):
+            delete_result = simulate_delete_managed_playlists(yt, paths.managed)
         ui.finish_step(
             f"Would delete {int(delete_result.get('would_delete', 0))} managed playlists"
         )
         ui.start_step("Create and fill playlists")
-        apply_result = simulate_apply_plan(
-            yt=yt,
-            liked_tracks=liked,
-            plan=plan,
-            create_playlists=True,
-        )
+        with ui.status("Previewing playlist rebuild"):
+            apply_result = simulate_apply_plan(
+                yt=yt,
+                liked_tracks=liked,
+                plan=plan,
+                create_playlists=True,
+            )
         results = apply_result.get("results", [])
         ui.finish_step(
             f"Would create {sum(1 for item in results if item.get('status') == 'created')} playlists"
@@ -997,20 +1022,23 @@ def run_full_reset(
     ui.finish_step("Plan ready")
 
     ui.start_step("Delete managed playlists")
-    delete_result = delete_managed_playlists(yt, paths.managed)
+    with ui.status("Deleting managed playlists"):
+        delete_result = delete_managed_playlists(yt, paths.managed)
     ui.finish_step(f"Deleted {delete_result.get('deleted', 0)} managed playlists")
     ui.start_step("Create and fill playlists")
-    apply_result = apply_plan(
-        yt=yt,
-        liked_path=paths.liked_songs,
-        plan_path=paths.playlist_plan,
-        missing_path=paths.missing_matches,
-        create_playlists=True,
-    )
+    with ui.status("Creating and filling YouTube Music playlists"):
+        apply_result = apply_plan(
+            yt=yt,
+            liked_path=paths.liked_songs,
+            plan_path=paths.playlist_plan,
+            missing_path=paths.missing_matches,
+            create_playlists=True,
+        )
     ui.finish_step("Playlists created/updated")
     ui.start_step("Finalize managed state")
-    update_managed_playlists(apply_result.get("results", []), paths.managed)
-    initialize_state(paths.liked_songs, paths.state)
+    with ui.status("Finalizing managed playlist state"):
+        update_managed_playlists(apply_result.get("results", []), paths.managed)
+        initialize_state(paths.liked_songs, paths.state)
     _set_bootstrap_completed(paths.bootstrap, completed=True)
     ui.finish_step("Managed playlist index and state refreshed")
     ui.finish_flow("Rebuild completed")

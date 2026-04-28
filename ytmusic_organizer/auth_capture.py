@@ -63,6 +63,16 @@ def _headers_to_raw(headers: dict[str, str]) -> str:
     return "\n".join(f"{key}: {value}" for key, value in headers.items())
 
 
+def _bring_page_to_front(page: Any) -> None:
+    bring_to_front = getattr(page, "bring_to_front", None)
+    if not callable(bring_to_front):
+        return
+    try:
+        bring_to_front()
+    except Exception:
+        return
+
+
 def _default_playwright_factory() -> Any:
     try:
         from playwright.sync_api import sync_playwright
@@ -134,7 +144,9 @@ def capture_browser_auth_headers(
 
                 context.on("request", handle_request)
                 page = context.pages[0] if context.pages else context.new_page()
+                _bring_page_to_front(page)
                 page.goto("https://music.youtube.com", wait_until="domcontentloaded")
+                _bring_page_to_front(page)
 
                 deadline = time.monotonic() + timeout_seconds
                 while captured is None and time.monotonic() < deadline:
@@ -143,7 +155,7 @@ def capture_browser_auth_headers(
                 if captured is None:
                     raise BrowserAuthCaptureError(
                         "Timed out waiting for authenticated YouTube Music traffic. "
-                        "Confirm the browser is logged in and reload music.youtube.com."
+                        "Log in, open or reload https://music.youtube.com, and keep the browser window open."
                     )
 
                 return _headers_to_raw(captured)

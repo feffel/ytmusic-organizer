@@ -63,6 +63,8 @@ By default, setup opens a YouTube Music browser window and captures the required
 auth headers after you log in. If browser capture is unavailable, setup falls
 back to manual header paste. If browser support is missing, setup asks before
 installing the required Playwright Chromium browser automatically.
+During longer network or browser steps, the CLI shows a wait indicator so you
+know work is still running.
 
 2. run your weekly sync:
 
