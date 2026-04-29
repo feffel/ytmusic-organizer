@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from ytmusic_organizer.config import Config, load_or_create_config, save_config
 from ytmusic_organizer.auth_capture import BrowserAuthCaptureError
-from ytmusic_organizer.workflows import ensure_bootstrap_completed, run_setup
+from ytmusic_organizer.workflows import ensure_bootstrap_completed, run_setup, run_weekly_sync
 
 
 class ConfigAndBootstrapTests(unittest.TestCase):
@@ -149,6 +149,93 @@ class ConfigAndBootstrapTests(unittest.TestCase):
             capture.assert_called_once_with(workspace)
             manual.assert_not_called()
             self.assertIn("authorization: SAPISIDHASH 123_hash", captured["headers_raw"])
+
+    def test_sync_interactive_repairs_missing_auth_for_completed_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            data_dir = workspace / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            (workspace / "bootstrap.json").write_text('{"completed": true}', encoding="utf-8")
+            (workspace / "config.toml").write_text(
+                'auth_file = "browser.json"\nclassification_mode = "manual"\nopenai_model = "gpt-4.1-mini"\n',
+                encoding="utf-8",
+            )
+            (workspace / "state.json").write_text('{"processed_video_ids": []}', encoding="utf-8")
+            captured: dict[str, str] = {}
+
+            def fake_setup(filepath: str | None = None, headers_raw: str | None = None):  # noqa: ANN001
+                captured["headers_raw"] = headers_raw or ""
+                Path(filepath or "").write_text("{}", encoding="utf-8")
+                return headers_raw or ""
+
+            with (
+                patch(
+                    "ytmusic_organizer.workflows._browser_capture_with_optional_install",
+                    return_value="\n".join(
+                        [
+                            "cookie: __Secure-3PAPISID=sapisid",
+                            "authorization: SAPISIDHASH repaired_hash",
+                            "x-goog-authuser: 0",
+                        ]
+                    ),
+                ) as capture,
+                patch("ytmusic_organizer.workflows.ytmusic_setup", side_effect=fake_setup),
+                patch("ytmusic_organizer.workflows.make_ytmusic", return_value=object()),
+                patch("ytmusic_organizer.workflows.export_new_likes", return_value=[]),
+            ):
+                result = run_weekly_sync(
+                    workspace=workspace,
+                    mode="manual",
+                    interactive=True,
+                    emit_ui=False,
+                )
+
+            capture.assert_called_once()
+            self.assertEqual(result["new_likes"], 0)
+            self.assertTrue((workspace / "browser.json").exists())
+            self.assertIn("authorization: SAPISIDHASH repaired_hash", captured["headers_raw"])
+
+    def test_sync_non_interactive_missing_auth_stays_strict(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "bootstrap.json").write_text('{"completed": true}', encoding="utf-8")
+            (workspace / "config.toml").write_text(
+                'auth_file = "browser.json"\nclassification_mode = "manual"\nopenai_model = "gpt-4.1-mini"\n',
+                encoding="utf-8",
+            )
+            (workspace / "state.json").write_text('{"processed_video_ids": []}', encoding="utf-8")
+
+            with self.assertRaises(FileNotFoundError) as ctx:
+                run_weekly_sync(
+                    workspace=workspace,
+                    mode="manual",
+                    interactive=False,
+                    emit_ui=False,
+                )
+
+            self.assertIn("Auth file not found", str(ctx.exception))
+
+    def test_sync_missing_auth_does_not_replace_first_time_setup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / ".ytmo"
+            workspace.mkdir(parents=True, exist_ok=True)
+
+            with (
+                self.assertRaises(RuntimeError) as ctx,
+                patch(
+                    "ytmusic_organizer.workflows._browser_capture_with_optional_install",
+                    side_effect=AssertionError("sync should not bootstrap first-time setup"),
+                ),
+            ):
+                run_weekly_sync(
+                    workspace=workspace,
+                    mode="manual",
+                    interactive=True,
+                    emit_ui=False,
+                )
+
+            self.assertIn("ytmo setup", str(ctx.exception))
 
     def test_setup_auto_falls_back_to_manual_when_browser_capture_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

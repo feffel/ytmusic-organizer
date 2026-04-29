@@ -332,6 +332,66 @@ def _browser_capture_with_optional_install(workspace: Path, ui: WizardUI) -> str
             return capture_browser_auth_headers(workspace)
 
 
+def _collect_interactive_auth_headers(
+    workspace: Path, ui: WizardUI, selected_auth_method: str
+) -> str:
+    if selected_auth_method in {"auto", "browser"}:
+        ui.note("A browser window will open.")
+        ui.note("Log in to YouTube Music if needed.")
+        ui.note("Keep this terminal open.")
+        ui.note("Return here after the capture completes.")
+        ui.note("Waiting for an authenticated YouTube Music request...")
+        try:
+            headers_raw = _browser_capture_with_optional_install(workspace, ui)
+        except Exception as exc:
+            if selected_auth_method == "browser":
+                raise
+            ui.warning("Browser auth capture failed: " + redact_auth_secrets(str(exc)))
+            ui.note("Falling back to manual browser header paste.")
+            ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
+            return _collect_auth_headers_from_stdin(ui=ui)
+        ui.success("Captured browser auth headers")
+        return headers_raw
+
+    ui.note("Starting browser auth setup (from browser network request headers).")
+    ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
+    return _collect_auth_headers_from_stdin(ui=ui)
+
+
+def _write_auth_file(auth_path: Path, headers_raw: str) -> None:
+    ytmusic_setup(filepath=str(auth_path), headers_raw=headers_raw)
+    if not auth_path.exists():
+        raise FileNotFoundError(f"Auth setup did not create file: {auth_path}")
+
+
+def _repair_missing_auth_for_completed_workspace(
+    *,
+    paths: WorkspacePaths,
+    auth_path: Path,
+    interactive: bool,
+    ui: WizardUI,
+    auth_method: str = "auto",
+) -> bool:
+    if auth_path.exists():
+        return False
+
+    if not interactive:
+        raise FileNotFoundError(
+            f"Auth file not found: {auth_path}. Run interactive sync or `ytmo setup` to repair auth."
+        )
+
+    selected_auth_method = (auth_method or "auto").strip().lower()
+    if selected_auth_method not in {"auto", "browser", "manual"}:
+        raise ValueError("auth_method must be one of: auto, browser, manual")
+
+    ui.warning("Auth file is missing for this completed workspace.")
+    ui.note("Repairing auth before continuing sync.")
+    headers_raw = _collect_interactive_auth_headers(paths.root, ui, selected_auth_method)
+    _write_auth_file(auth_path, headers_raw)
+    ui.success("Auth repaired")
+    return True
+
+
 def _load_managed_playlists(paths: WorkspacePaths) -> list[str]:
     if not paths.managed.exists():
         return []
@@ -579,33 +639,8 @@ def run_setup(
                     )
 
                 ui.warning("No auth file found in workspace.")
-                if selected_auth_method in {"auto", "browser"}:
-                    ui.note("A browser window will open.")
-                    ui.note("Log in to YouTube Music if needed.")
-                    ui.note("Keep this terminal open.")
-                    ui.note("Return here after the capture completes.")
-                    ui.note("Waiting for an authenticated YouTube Music request...")
-                    try:
-                        headers_raw = _browser_capture_with_optional_install(workspace, ui)
-                    except Exception as exc:
-                        if selected_auth_method == "browser":
-                            raise
-                        ui.warning("Browser auth capture failed: " + redact_auth_secrets(str(exc)))
-                        ui.note("Falling back to manual browser header paste.")
-                        ui.note(
-                            "Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html"
-                        )
-                        headers_raw = _collect_auth_headers_from_stdin(ui=ui)
-                    else:
-                        ui.success("Captured browser auth headers")
-                else:
-                    ui.note("Starting browser auth setup (from browser network request headers).")
-                    ui.note("Guide: https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html")
-                    headers_raw = _collect_auth_headers_from_stdin(ui=ui)
-                ytmusic_setup(filepath=str(auth_path), headers_raw=headers_raw)
-
-                if not auth_path.exists():
-                    raise FileNotFoundError(f"Auth setup did not create file: {auth_path}")
+                headers_raw = _collect_interactive_auth_headers(workspace, ui, selected_auth_method)
+                _write_auth_file(auth_path, headers_raw)
             state.mark_step("auth_ready")
             ui.success("Auth ready")
         else:
@@ -852,7 +887,14 @@ def run_weekly_sync(
     config = _load_config_readonly(paths.config) if dry_run else load_or_create_config(paths.config)
     selected_mode = _effective_mode(mode, config)
     auth_path = _resolve_auth_path(config.auth_file, paths.root)
-    if not auth_path.exists():
+    if not dry_run:
+        _repair_missing_auth_for_completed_workspace(
+            paths=paths,
+            auth_path=auth_path,
+            interactive=interactive,
+            ui=ui,
+        )
+    elif not auth_path.exists():
         raise FileNotFoundError(f"Auth file not found: {auth_path}")
     yt = make_ytmusic(auth_path)
 

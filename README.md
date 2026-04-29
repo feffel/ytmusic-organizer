@@ -72,6 +72,11 @@ know work is still running.
 ytmo sync
 ```
 
+If setup already completed but `browser.json` is missing later, interactive
+`ytmo sync` can repair auth with the same browser-assisted flow before it
+continues. `--non-interactive` and `--dry-run` still require an existing auth
+file.
+
 3. if you want end-to-end planning, use api mode:
 
 ```bash

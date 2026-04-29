@@ -43,6 +43,8 @@ Auth methods:
 
 Browser capture uses a tool-owned browser profile in the workspace. Setup tells you to log in to YouTube Music if needed, keeps waiting for an authenticated request, and tries to bring the browser page forward. If Chromium is missing, interactive setup asks before installing the required Playwright browser automatically.
 
+After setup has completed, interactive `ytmo sync` also repairs a missing configured auth file with the same browser-first flow before continuing. This is only an auth repair path; it does not replace first-time `ytmo setup`, because sync depends on setup-created state and managed-playlist artifacts. Non-interactive sync and all dry-runs require an existing readable auth file.
+
 Long-running network, browser, playlist, and classification steps show a wait indicator in human output. JSON output stays machine-readable and does not include wait text.
 
 Troubleshooting: if setup reports that the Python `playwright` package is unavailable, reinstall or upgrade `ytmusic-organizer` so its runtime environment includes declared dependencies.
