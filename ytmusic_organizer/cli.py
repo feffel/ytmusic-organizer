@@ -66,13 +66,16 @@ def build_helpful_error(exc: BaseException) -> str:
             f"Auth file is missing.\n"
             f"{text}\n\n"
             "How to fix:\n"
-            "1. Run interactive setup (recommended):\n"
+            "1. For an already-setup workspace, run sync interactively:\n"
+            "   ytmo sync\n"
+            "   This can repair <workspace>/browser.json before continuing.\n"
+            "2. For first-time setup, run guided setup:\n"
             "   ytmo setup\n"
             "   This creates <workspace>/browser.json for you.\n"
-            "2. If you already have a file, pass it explicitly:\n"
+            "3. If you already have a file, pass it explicitly during setup:\n"
             "   ytmo setup --auth-file /absolute/path/to/browser.json\n"
-            "3. Dry-run still requires readable auth and may call network APIs.\n"
-            "4. Auth guide reference:\n"
+            "4. Dry-run and --non-interactive still require readable auth and may call network APIs.\n"
+            "5. Auth guide reference:\n"
             "   https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html"
         )
 
@@ -217,6 +220,12 @@ def _base_parser(*, exit_on_error: bool = True) -> argparse.ArgumentParser:
     add_dry_run_argument(p_setup)
     p_setup.add_argument("--mode", choices=["manual", "api"], help="Classification mode")
     p_setup.add_argument("--auth-file", help="Path to browser.json auth file")
+    p_setup.add_argument(
+        "--auth-method",
+        choices=["auto", "browser", "manual"],
+        default="auto",
+        help="How interactive setup should create browser auth when auth is missing",
+    )
     p_setup.add_argument("--non-interactive", action="store_true", help="Disable prompts")
     p_setup.add_argument(
         "--restart", action="store_true", help="Reset setup progress and start from scratch"
@@ -320,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
                 emit_ui=not json_output,
                 restart=args.restart,
                 dry_run=args.dry_run,
+                auth_method=args.auth_method,
             )
             if json_output:
                 emit_json("ok", "setup", result=result)

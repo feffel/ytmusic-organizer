@@ -122,6 +122,60 @@ class UISurfaceTests(unittest.TestCase):
         ]
         return result
 
+    def test_status_plain_mode_prints_single_wait_line(self) -> None:
+        capture = io.StringIO()
+        with patch("sys.stdout", capture):
+            ui = WizardUI(enabled=True, force_tty=False)
+            with ui.status("Downloading browser support"):
+                print("inside")
+
+        output = capture.getvalue()
+        self.assertIn("[wait] Downloading browser support", output)
+        self.assertEqual(output.count("[wait]"), 1)
+        self.assertIn("inside", output)
+
+    def test_status_disabled_mode_is_silent(self) -> None:
+        capture = io.StringIO()
+        with patch("sys.stdout", capture):
+            ui = WizardUI(enabled=False, force_tty=False)
+            with ui.status("Hidden work"):
+                print("inside")
+
+        output = capture.getvalue()
+        self.assertNotIn("[wait]", output)
+        self.assertIn("inside", output)
+
+    def test_status_rich_mode_uses_console_status(self) -> None:
+        class _FakeStatus:
+            entered = False
+            exited = False
+
+            def __enter__(self):
+                self.entered = True
+                return self
+
+            def __exit__(self, *_exc) -> None:  # noqa: ANN002
+                self.exited = True
+
+        class _FakeConsole:
+            def __init__(self) -> None:
+                self.status_calls: list[str] = []
+                self.status_context = _FakeStatus()
+
+            def status(self, message: str):
+                self.status_calls.append(message)
+                return self.status_context
+
+        fake_console = _FakeConsole()
+        with patch("ytmusic_organizer.ui.Console", return_value=fake_console):
+            ui = WizardUI(enabled=True, force_tty=True)
+            with ui.status("Capturing auth"):
+                pass
+
+        self.assertEqual(fake_console.status_calls, ["Capturing auth"])
+        self.assertTrue(fake_console.status_context.entered)
+        self.assertTrue(fake_console.status_context.exited)
+
     def test_show_stats_uses_staged_animation_in_rich_tty_mode(self) -> None:
         with (
             patch("ytmusic_organizer.ui.Console"),

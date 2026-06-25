@@ -59,11 +59,23 @@ pipx install .
 ytmo setup
 ```
 
+By default, setup opens a YouTube Music browser window and captures the required
+auth headers after you log in. If browser capture is unavailable, setup falls
+back to manual header paste. If browser support is missing, setup asks before
+installing the required Playwright Chromium browser automatically.
+During longer network or browser steps, the CLI shows a wait indicator so you
+know work is still running.
+
 2. run your weekly sync:
 
 ```bash
 ytmo sync
 ```
+
+If setup already completed but `browser.json` is missing later, interactive
+`ytmo sync` can repair auth with the same browser-assisted flow before it
+continues. `--non-interactive` and `--dry-run` still require an existing auth
+file.
 
 3. if you want end-to-end planning, use api mode:
 

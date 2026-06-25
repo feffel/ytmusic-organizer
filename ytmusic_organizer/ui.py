@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager, nullcontext
 import os
 import random
 import re
@@ -290,6 +291,19 @@ class WizardUI:
         print(f"  [note] {text}")
         if microcopy:
             print(f"    {microcopy}")
+
+    @contextmanager
+    def status(self, message: str):
+        if not self._enabled:
+            with nullcontext():
+                yield
+            return
+        if self._rich_tty and self._console:
+            with self._console.status(self._style_paths(message)):
+                yield
+            return
+        print(f"[wait] {message}")
+        yield
 
     def finish_step(self, text: str) -> None:
         if not self._enabled:

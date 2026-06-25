@@ -4,7 +4,7 @@ This page keeps detailed usage and maintainer-oriented details out of the main R
 
 ## Commands
 
-- `ytmo setup [--mode manual|api] [--auth-file PATH] [--non-interactive] [--restart] [--dry-run]`
+- `ytmo setup [--mode manual|api] [--auth-file PATH] [--auth-method auto|browser|manual] [--non-interactive] [--restart] [--dry-run]`
 - `ytmo sync [--mode manual|api] [--non-interactive] [--dry-run]`
 - `ytmo rebuild [--yes] [--mode manual|api] [--non-interactive] [--dry-run]`
 - `ytmo cleanup [--yes] [--local-only] [--dry-run]`
@@ -34,7 +34,20 @@ Shared options:
 
 ## Auth Setup
 
-`ytmo setup` creates `browser.json` from pasted browser request headers.
+`ytmo setup` creates `browser.json` from browser request headers.
+
+Auth methods:
+- `auto` (default): open YouTube Music and capture authenticated browser traffic; fall back to manual paste if capture fails.
+- `browser`: require browser capture and fail if it cannot capture auth.
+- `manual`: skip browser capture and paste request headers.
+
+Browser capture uses a tool-owned browser profile in the workspace. Setup tells you to log in to YouTube Music if needed, keeps waiting for an authenticated request, and tries to bring the browser page forward. If Chromium is missing, interactive setup asks before installing the required Playwright browser automatically.
+
+After setup has completed, interactive `ytmo sync` also repairs a missing configured auth file with the same browser-first flow before continuing. This is only an auth repair path; it does not replace first-time `ytmo setup`, because sync depends on setup-created state and managed-playlist artifacts. Non-interactive sync and all dry-runs require an existing readable auth file.
+
+Long-running network, browser, playlist, and classification steps show a wait indicator in human output. JSON output stays machine-readable and does not include wait text.
+
+Troubleshooting: if setup reports that the Python `playwright` package is unavailable, reinstall or upgrade `ytmusic-organizer` so its runtime environment includes declared dependencies.
 
 Accepted paste formats:
 - Raw header lines, submitted with one blank line:
