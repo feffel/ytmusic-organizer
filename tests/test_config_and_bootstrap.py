@@ -587,6 +587,7 @@ class ConfigAndBootstrapTests(unittest.TestCase):
                         mode="manual",
                         interactive=True,
                         emit_ui=False,
+                        auth_method="manual",
                     )
             self.assertIn(
                 "AUTH_HEADERS_INVALID::Missing required header(s): x-goog-authuser",
